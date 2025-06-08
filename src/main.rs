@@ -150,27 +150,6 @@ async fn run(data_dir: &Path) -> Result<()> {
     Ok(())
 }
 
-#[instrument(skip_all)]
-fn set_read_marker(room: Room, event_id: OwnedEventId) {
-    tokio::spawn(async move {
-        if let Err(err) = room
-            .send_multiple_receipts(
-                Receipts::new()
-                    .fully_read_marker(event_id.clone())
-                    .public_read_receipt(event_id.clone()),
-            )
-            .await
-        {
-            error!(
-                "Failed to set the read marker of room {} to event {}: {:?}",
-                room.room_id(),
-                event_id,
-                err
-            );
-        }
-    });
-}
-
 // https://spec.matrix.org/v1.14/client-server-api/#mroommessage
 #[instrument(skip_all)]
 async fn on_message(
@@ -184,7 +163,6 @@ async fn on_message(
         return Ok(());
     }
     debug!("room = {}, event = {:?}", room.room_id(), event);
-    set_read_marker(room.clone(), event.event_id.clone());
     if room.state() != RoomState::Joined {
         info!(
             "Ignoring room {}: Current room state is {:?}.",
@@ -221,7 +199,10 @@ async fn on_message(
         urls
     };
 
-    info!("URLs: {:?}", urls.iter().map(Url::as_str).collect::<Vec<_>>());
+    info!(
+        "URLs: {:?}",
+        urls.iter().map(Url::as_str).collect::<Vec<_>>()
+    );
     ctx.on_message(room, thread_id, &original_event_id, urls)
         .await?;
 
@@ -240,7 +221,6 @@ async fn on_deletion(
         return Ok(());
     }
     debug!("room = {}, event = {:?}", room.room_id(), event);
-    set_read_marker(room.clone(), event.event_id.clone());
     if room.state() != RoomState::Joined {
         info!(
             "Ignoring room {}: Current room state is {:?}.",
