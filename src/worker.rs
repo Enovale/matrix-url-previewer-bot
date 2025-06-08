@@ -17,7 +17,7 @@ use serde_with::{DefaultOnError, serde_as};
 use tracing::{error, info, instrument};
 use url::Url;
 
-use crate::common::{MAX_RESPONSE_TEXT_BYTES, SAFE_URL_LENGTH};
+use crate::common::{MAX_RESPONSE_TEXT_BYTES, MAX_URL_COUNTS_PER_MESSAGE, SAFE_URL_LENGTH};
 use crate::html_escape;
 
 #[derive(Clone)]
@@ -200,7 +200,7 @@ PRAGMA optimize;
         let mut reply_text = String::new();
         let mut reply_html = String::new();
 
-        for url in urls {
+        for url in urls.into_iter().take(MAX_URL_COUNTS_PER_MESSAGE) {
             info!("Fetching URL preview for: {url}");
             let request = get_media_preview::v1::Request::new(url.to_string());
             let response = match room
