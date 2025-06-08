@@ -17,9 +17,7 @@ use serde_with::{DefaultOnError, serde_as};
 use tracing::{error, info, instrument};
 use url::Url;
 
-use crate::common::{
-    MAX_RESPONSE_TEXT_BYTES, MAX_RESPONSE_TEXT_DESCRIPTION_LINES, SAFE_URL_LENGTH,
-};
+use crate::common::{MAX_RESPONSE_TEXT_BYTES, SAFE_URL_LENGTH};
 use crate::html_escape;
 
 #[derive(Clone)]
@@ -121,7 +119,7 @@ PRAGMA optimize;
             };
             let response = RoomMessageEventContentWithoutRelation::notice_html(
                 "(Loading…)",
-                "<blockquote><em>Loading…</em></blockquote>",
+                "<blockquote><div class=\"m13253-url-preview-loading\"><em>Loading…</em></div></blockquote>",
             )
             .add_mentions(Mentions::new())
             .with_relation(relates_to);
@@ -240,23 +238,10 @@ PRAGMA optimize;
                 bytes_remaining,
             );
             bytes_remaining = bytes_remaining.saturating_sub(title.len());
-            let mut description = Vec::<String>::with_capacity(MAX_RESPONSE_TEXT_DESCRIPTION_LINES);
-            for line in preview
-                .description
-                .lines()
-                .map(Self::collapse_whitespace)
-                .filter(|line| !line.is_empty())
-            {
-                if description.len() >= MAX_RESPONSE_TEXT_DESCRIPTION_LINES {
-                    let last_line = description.last_mut().unwrap();
-                    if !last_line.ends_with("…") {
-                        last_line.push_str("…");
-                    }
-                    break;
-                }
-                description.push(Self::limit_text_length(line, bytes_remaining));
-                bytes_remaining = bytes_remaining.saturating_sub(description.last().unwrap().len());
-            }
+            let description = Self::limit_text_length(
+                Self::collapse_whitespace(&preview.description),
+                bytes_remaining,
+            );
             let canonical_url = Url::parse(&preview.url)
                 .ok()
                 .filter(|url| url.as_str().len() <= SAFE_URL_LENGTH)
@@ -264,13 +249,13 @@ PRAGMA optimize;
 
             if title.is_empty() {
                 reply_html = format!(
-                    "<blockquote><em><a href=\"{}\">No title</a></em>",
+                    "<blockquote><div class=\"m13253-url-preview-headline\"><em><a class=\"m13253-url-preview-empty-title\" href=\"{}\">No title</a></em>",
                     html_escape::attr(canonical_url.as_str())
                 );
                 reply_text = "(No title)".to_owned();
             } else {
                 reply_html = format!(
-                    "<blockquote><strong><a href=\"{}\">{}</a></strong>",
+                    "<blockquote><div class=\"m13253-url-preview-headline\"><strong><a class=\"m13253-url-preview-title\" href=\"{}\">{}</a></strong>",
                     html_escape::attr(canonical_url.as_str()),
                     html_escape::text(&title)
                 );
@@ -279,14 +264,17 @@ PRAGMA optimize;
             if !site_name.is_empty() {
                 reply_text.push_str(" \u{2013} ");
                 reply_text.push_str(&site_name);
-                reply_html.push_str(" \u{2013} ");
+                reply_html.push_str(" \u{2013} <span class=\"m13253-url-preview-site-name\">");
                 reply_html.push_str(&html_escape::text(&site_name));
+                reply_html.push_str("</span>");
             }
-            for line in description {
+            reply_html.push_str("</div>");
+            if !description.is_empty() {
                 reply_text.push_str("\n> ");
-                reply_text.push_str(&line);
-                reply_html.push_str("<br />");
-                reply_html.push_str(&html_escape::text(&line));
+                reply_text.push_str(&description);
+                reply_html.push_str("<div class=\"m13253-url-preview-description\">");
+                reply_html.push_str(&html_escape::text(&description));
+                reply_html.push_str("</div>");
             }
             reply_html.push_str("</blockquote>");
             break;
@@ -298,7 +286,7 @@ PRAGMA optimize;
             }
             reply_text = "(URL preview is unavailable.)".to_string();
             reply_html =
-                "<blockquote><em>URL preview is unavailable.</em></blockquote>".to_string();
+                "<blockquote><div class=\"url-preview-error\"><em>URL preview is unavailable.</em></div></blockquote>".to_string();
         }
 
         let reply = RoomMessageEventContentWithoutRelation::notice_plain("")
