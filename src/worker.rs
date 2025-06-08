@@ -300,13 +300,16 @@ PRAGMA optimize;
             );
         }
 
-        let reply = RoomMessageEventContentWithoutRelation::notice_plain("")
-            .add_mentions(Mentions::new())
-            .with_relation(Some(Relation::Replacement(Replacement::new(
-                response_id,
-                RoomMessageEventContentWithoutRelation::notice_html(reply_text, reply_html)
-                    .add_mentions(Mentions::new()),
-            ))));
+        let reply = RoomMessageEventContentWithoutRelation::notice_html(
+            reply_text.clone(),
+            reply_html.clone(),
+        )
+        .add_mentions(Mentions::new())
+        .with_relation(Some(Relation::Replacement(Replacement::new(
+            response_id,
+            RoomMessageEventContentWithoutRelation::notice_html(reply_text, reply_html)
+                .add_mentions(Mentions::new()),
+        ))));
         if let Err(err) = room.send(reply).await {
             error!("Failed to send URL preview: {err}");
         }
