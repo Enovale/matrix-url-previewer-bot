@@ -4,8 +4,6 @@ use eyre::Result;
 use indexmap::IndexSet;
 use matrix_sdk::config::SyncSettings;
 use matrix_sdk::event_handler::Ctx;
-use matrix_sdk::room::Receipts;
-use matrix_sdk::ruma::OwnedEventId;
 use matrix_sdk::ruma::api::client::filter::FilterDefinition;
 use matrix_sdk::ruma::events::room::encrypted::OriginalSyncRoomEncryptedEvent;
 use matrix_sdk::ruma::events::room::member::{MembershipState, SyncRoomMemberEvent};
@@ -203,7 +201,7 @@ async fn on_message(
         "URLs: {:?}",
         urls.iter().map(Url::as_str).collect::<Vec<_>>()
     );
-    ctx.on_message(room, thread_id, &original_event_id, urls)
+    ctx.on_message(room, thread_id, original_event_id, urls)
         .await?;
 
     Ok(())
