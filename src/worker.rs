@@ -118,7 +118,7 @@ PRAGMA optimize;
             let response = RoomMessageEventContentWithoutRelation::notice_html(
                 "(Loading…)",
                 format!(
-                    "<blockquote><div class=\"m13253-url-preview-headline\"><a class=\"m13253-url-preview-backref\" href=\"https://matrix.to/#{}/{}\">\u{1f517}\u{fe0f}</a> <span class=\"m13253-url-preview-loading\"><em>Loading…</em></span></div></blockquote>",
+                    "<blockquote><div class=\"m13253-url-preview-headline\"><a class=\"m13253-url-preview-backref\" href=\"https://matrix.to/#/{}/{}\">\u{1f517}\u{fe0f}</a> <span class=\"m13253-url-preview-loading\"><em>Loading…</em></span></div></blockquote>",
                     html_escape::attr(room.room_id().as_str()),
                     html_escape::attr(original_event_id.as_str())
                 ),
@@ -253,7 +253,7 @@ PRAGMA optimize;
 
             if title.is_empty() {
                 reply_html = format!(
-                    "<blockquote><div class=\"m13253-url-preview-headline\"><a class=\"m13253-url-preview-backref\" href=\"https://matrix.to/#{}/{}\">\u{1f517}\u{fe0f}</a> <em><a class=\"m13253-url-preview-empty-title\" href=\"{}\">No title</a></em>",
+                    "<blockquote><div class=\"m13253-url-preview-headline\"><a class=\"m13253-url-preview-backref\" href=\"https://matrix.to/#/{}/{}\">\u{1f517}\u{fe0f}</a> <em><a class=\"m13253-url-preview-empty-title\" href=\"{}\">No title</a></em>",
                     html_escape::attr(room.room_id().as_str()),
                     html_escape::attr(original_event_id.as_str()),
                     html_escape::attr(canonical_url.as_str())
@@ -261,7 +261,7 @@ PRAGMA optimize;
                 reply_text = "(No title)".to_owned();
             } else {
                 reply_html = format!(
-                    "<blockquote><div class=\"m13253-url-preview-headline\"><a class=\"m13253-url-preview-backref\" href=\"https://matrix.to/#{}/{}\">\u{1f517}\u{fe0f}</a> <strong><a class=\"m13253-url-preview-title\" href=\"{}\">{}</a></strong>",
+                    "<blockquote><div class=\"m13253-url-preview-headline\"><a class=\"m13253-url-preview-backref\" href=\"https://matrix.to/#/{}/{}\">\u{1f517}\u{fe0f}</a> <strong><a class=\"m13253-url-preview-title\" href=\"{}\">{}</a></strong>",
                     html_escape::attr(room.room_id().as_str()),
                     html_escape::attr(original_event_id.as_str()),
                     html_escape::attr(canonical_url.as_str()),
@@ -294,7 +294,7 @@ PRAGMA optimize;
             }
             reply_text = "(URL preview is unavailable.)".to_string();
             reply_html = format!(
-                "<blockquote><div class=\"m13253-url-preview-headline\"><a class=\"m13253-url-preview-backref\" href=\"https://matrix.to/#{}/{}\">\u{1f517}\u{fe0f}</a> <span class=\"url-preview-error\"><em>URL preview is unavailable.</em></span></div></blockquote>",
+                "<blockquote><div class=\"m13253-url-preview-headline\"><a class=\"m13253-url-preview-backref\" href=\"https://matrix.to/#/{}/{}\">\u{1f517}\u{fe0f}</a> <span class=\"url-preview-error\"><em>URL preview is unavailable.</em></span></div></blockquote>",
                 html_escape::attr(room.room_id().as_str()),
                 html_escape::attr(original_event_id.as_str())
             );
