@@ -103,10 +103,10 @@ PRAGMA optimize;
             .await
             .unwrap()?;
 
-        // This is basically `room.matrix_event_permalink`, but can't fail.
+        // This is basically `room.matrix_to_event_permalink`, but can't fail.
         let original_event_link = room
             .room_id()
-            .matrix_event_uri_via(
+            .matrix_to_event_uri_via(
                 original_event_id.clone(),
                 room.route().await.unwrap_or_default(),
             )
