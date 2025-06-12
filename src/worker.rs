@@ -14,7 +14,7 @@ use matrix_sdk::ruma::{EventId, OwnedEventId};
 use regex::Regex;
 use serde::Deserialize;
 use serde_with::{DefaultOnError, serde_as};
-use tracing::{error, info, instrument};
+use tracing::{Instrument, error, info, instrument};
 use url::Url;
 
 use crate::common::{MAX_RESPONSE_TEXT_BYTES, MAX_URL_COUNTS_PER_MESSAGE, SAFE_URL_LENGTH};
@@ -184,11 +184,14 @@ PRAGMA optimize;
         };
 
         let response_id_clone = response_id.clone();
-        tokio::spawn(async move {
-            if let Err(err) = room.redact(&response_id_clone, None, None).await {
-                error!("Failed to delete URL preview message: {err}");
+        tokio::spawn(
+            async move {
+                if let Err(err) = room.redact(&response_id_clone, None, None).await {
+                    error!("Failed to delete URL preview message: {err}");
+                }
             }
-        });
+            .in_current_span(),
+        );
 
         Ok(Some(response_id))
     }

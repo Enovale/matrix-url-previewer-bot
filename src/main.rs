@@ -12,7 +12,7 @@ use matrix_sdk::ruma::events::room::message::{
 };
 use matrix_sdk::ruma::events::room::redaction::OriginalSyncRoomRedactionEvent;
 use matrix_sdk::{Client, Room, RoomState};
-use tracing::{debug, error, info, instrument, warn};
+use tracing::{Instrument, debug, error, info, instrument, warn};
 use tracing_subscriber::{EnvFilter, prelude::*};
 use url::Url;
 
@@ -132,15 +132,18 @@ async fn run(data_dir: &Path) -> Result<()> {
 
     // Forget rooms that we already left
     let left_rooms = client.left_rooms();
-    tokio::spawn(async move {
-        for room in left_rooms {
-            info!("Forgetting room {}.", room.room_id());
-            match room.forget().await {
-                Ok(_) => info!("Forgot room {}.", room.room_id()),
-                Err(err) => error!("Failed to forget room {}: {:?}", room.room_id(), err),
+    tokio::spawn(
+        async move {
+            for room in left_rooms {
+                info!("Forgetting room {}.", room.room_id());
+                match room.forget().await {
+                    Ok(_) => info!("Forgot room {}.", room.room_id()),
+                    Err(err) => error!("Failed to forget room {}: {:?}", room.room_id(), err),
+                }
             }
         }
-    });
+        .in_current_span(),
+    );
 
     info!("Starting sync.");
     sync_helper.sync(&client, sync_settings).await?;
@@ -254,29 +257,37 @@ async fn on_leave(event: SyncRoomMemberEvent, room: Room) {
 
     match room.state() {
         RoomState::Joined => {
-            tokio::spawn(async move {
-                if let Err(err) = room.sync_members().await {
-                    warn!("Failed to sync members of {}: {:?}", room.room_id(), err);
-                }
-                // Only I remain in the room.
-                if room.joined_members_count() <= 1 {
-                    info!("Leaving room {}.", room.room_id());
-                    match room.leave().await {
-                        Ok(_) => info!("Left room {}.", room.room_id()),
-                        Err(err) => error!("Failed to leave room {}: {:?}", room.room_id(), err),
+            tokio::spawn(
+                async move {
+                    if let Err(err) = room.sync_members().await {
+                        warn!("Failed to sync members of {}: {:?}", room.room_id(), err);
+                    }
+                    // Only I remain in the room.
+                    if room.joined_members_count() <= 1 {
+                        info!("Leaving room {}.", room.room_id());
+                        match room.leave().await {
+                            Ok(_) => info!("Left room {}.", room.room_id()),
+                            Err(err) => {
+                                error!("Failed to leave room {}: {:?}", room.room_id(), err)
+                            }
+                        }
                     }
                 }
-            });
+                .in_current_span(),
+            );
         }
         RoomState::Banned | RoomState::Left => {
             // Either I successfully left the room, or someone kicked me out.
-            tokio::spawn(async move {
-                info!("Forgetting room {}.", room.room_id());
-                match room.forget().await {
-                    Ok(_) => info!("Forgot room {}.", room.room_id()),
-                    Err(err) => error!("Failed to forget room {}: {:?}", room.room_id(), err),
+            tokio::spawn(
+                async move {
+                    info!("Forgetting room {}.", room.room_id());
+                    match room.forget().await {
+                        Ok(_) => info!("Forgot room {}.", room.room_id()),
+                        Err(err) => error!("Failed to forget room {}: {:?}", room.room_id(), err),
+                    }
                 }
-            });
+                .in_current_span(),
+            );
         }
         _ => (),
     }
