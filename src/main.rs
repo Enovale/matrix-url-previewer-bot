@@ -42,7 +42,7 @@ enum Command {
         #[clap(
             long,
             value_name = "DEVICE_NAME",
-            default_value = "matrixbot-ezlogin/matrix-url-previewer-bot",
+            default_value = concat!("matrixbot-ezlogin/", env!("CARGO_BIN_NAME")),
             help = "Device name to use for this session"
         )]
         device_name: String,
