@@ -111,6 +111,7 @@ async fn run(data_dir: &Path) -> Result<()> {
     let (client, sync_helper) = matrixbot_ezlogin::login(data_dir).await?;
 
     // We don't ignore joining and leaving events happened during downtime.
+    client.add_event_handler_context(worker);
     client.add_event_handler(on_leave);
 
     // Enable room members lazy-loading, it will speed up the initial sync a lot with accounts in lots of rooms.
@@ -125,7 +126,6 @@ async fn run(data_dir: &Path) -> Result<()> {
         .sync_once(&client, sync_settings.clone())
         .await?;
 
-    client.add_event_handler_context(worker);
     client.add_event_handler(on_message);
     client.add_event_handler(on_deletion);
     client.add_event_handler(on_utd);
