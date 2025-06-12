@@ -103,6 +103,15 @@ PRAGMA optimize;
             .await
             .unwrap()?;
 
+        // This is basically `room.matrix_event_permalink`, but can't fail.
+        let original_event_link = room
+            .room_id()
+            .matrix_event_uri_via(
+                original_event_id.clone(),
+                room.route().await.unwrap_or_default(),
+            )
+            .to_string();
+
         let (response_id, is_edit) = if let Some(response_id) = response_id {
             (OwnedEventId::try_from(response_id)?, true)
         } else if urls.is_empty() {
@@ -118,9 +127,8 @@ PRAGMA optimize;
             let response = RoomMessageEventContentWithoutRelation::notice_html(
                 "(Loading…)",
                 format!(
-                    "<blockquote><div class=\"m13253-url-preview-headline\"><a class=\"m13253-url-preview-backref\" href=\"https://matrix.to/#/{}/{}\">\u{1f517}\u{fe0f}</a> <span class=\"m13253-url-preview-loading\"><em>Loading…</em></span></div></blockquote>",
-                    html_escape::attr(room.room_id().as_str()),
-                    html_escape::attr(original_event_id.as_str())
+                    "<blockquote><div class=\"m13253-url-preview-headline\"><a class=\"m13253-url-preview-backref\" href=\"{}\">\u{1f517}\u{fe0f}</a> <span class=\"m13253-url-preview-loading\"><em>Loading…</em></span></div></blockquote>",
+                    html_escape::attr(&original_event_link)
                 ),
             )
             .add_mentions(Mentions::new())
@@ -144,7 +152,7 @@ PRAGMA optimize;
 
         tokio::spawn(Self::create_url_preview(
             room,
-            original_event_id,
+            original_event_link,
             response_id.clone(),
             is_edit,
             urls,
@@ -199,7 +207,7 @@ PRAGMA optimize;
     #[instrument(skip_all)]
     async fn create_url_preview(
         room: Room,
-        original_event_id: OwnedEventId,
+        original_event_link: String,
         response_id: OwnedEventId,
         is_edit: bool,
         urls: IndexSet<Url>,
@@ -256,17 +264,15 @@ PRAGMA optimize;
 
             if title.is_empty() {
                 reply_html = format!(
-                    "<blockquote><div class=\"m13253-url-preview-headline\"><a class=\"m13253-url-preview-backref\" href=\"https://matrix.to/#/{}/{}\">\u{1f517}\u{fe0f}</a> <em><a class=\"m13253-url-preview-empty-title\" href=\"{}\">No title</a></em>",
-                    html_escape::attr(room.room_id().as_str()),
-                    html_escape::attr(original_event_id.as_str()),
+                    "<blockquote><div class=\"m13253-url-preview-headline\"><a class=\"m13253-url-preview-backref\" href=\"{}\">\u{1f517}\u{fe0f}</a> <em><a class=\"m13253-url-preview-empty-title\" href=\"{}\">No title</a></em>",
+                    html_escape::attr(&original_event_link),
                     html_escape::attr(canonical_url.as_str())
                 );
                 reply_text = "(No title)".to_owned();
             } else {
                 reply_html = format!(
-                    "<blockquote><div class=\"m13253-url-preview-headline\"><a class=\"m13253-url-preview-backref\" href=\"https://matrix.to/#/{}/{}\">\u{1f517}\u{fe0f}</a> <strong><a class=\"m13253-url-preview-title\" href=\"{}\">{}</a></strong>",
-                    html_escape::attr(room.room_id().as_str()),
-                    html_escape::attr(original_event_id.as_str()),
+                    "<blockquote><div class=\"m13253-url-preview-headline\"><a class=\"m13253-url-preview-backref\" href=\"{}\">\u{1f517}\u{fe0f}</a> <strong><a class=\"m13253-url-preview-title\" href=\"{}\">{}</a></strong>",
+                    html_escape::attr(&original_event_link),
                     html_escape::attr(canonical_url.as_str()),
                     html_escape::text(&title)
                 );
@@ -297,9 +303,8 @@ PRAGMA optimize;
             }
             reply_text = "(URL preview is unavailable.)".to_string();
             reply_html = format!(
-                "<blockquote><div class=\"m13253-url-preview-headline\"><a class=\"m13253-url-preview-backref\" href=\"https://matrix.to/#/{}/{}\">\u{1f517}\u{fe0f}</a> <span class=\"url-preview-error\"><em>URL preview is unavailable.</em></span></div></blockquote>",
-                html_escape::attr(room.room_id().as_str()),
-                html_escape::attr(original_event_id.as_str())
+                "<blockquote><div class=\"m13253-url-preview-headline\"><a class=\"m13253-url-preview-backref\" href=\"{}\">\u{1f517}\u{fe0f}</a> <span class=\"url-preview-error\"><em>URL preview is unavailable.</em></span></div></blockquote>",
+                html_escape::attr(&original_event_link)
             );
         }
 
