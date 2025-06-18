@@ -23,6 +23,9 @@ pub struct Config {
 
     #[serde(default)]
     pub crawler_user_agent: String,
+
+    #[serde(default)]
+    pub rewrite_url: Vec<[String; 2]>,
 }
 
 impl Config {

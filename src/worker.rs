@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::str::FromStr;
 use std::sync::{Arc, LazyLock};
 use std::time::Duration;
@@ -17,7 +18,7 @@ use mime::Mime;
 use moka::future::{Cache, CacheBuilder};
 use regex::Regex;
 use scraper::{Html, Selector};
-use tracing::{Instrument, error, info, instrument, warn};
+use tracing::{Instrument, debug, error, info, instrument, warn};
 use url::Url;
 
 use crate::common::{
@@ -30,6 +31,7 @@ pub struct Worker {
     config: Arc<config::Config>,
     db: Pool,
     reqwest_client: reqwest::Client,
+    rewrite_url: Vec<(Regex, String)>,
 }
 
 #[derive(Clone, Debug)]
@@ -85,11 +87,18 @@ PRAGMA optimize;
         }
         let reqwest_client = reqwest_builder.build()?;
 
+        let rewrite_url = config
+            .rewrite_url
+            .iter()
+            .map(|[from, to]| Ok((Regex::new(from)?, to.clone())))
+            .collect::<Result<Vec<_>>>()?;
+
         Ok(Arc::new(Worker {
             cache,
             config,
             db,
             reqwest_client,
+            rewrite_url,
         }))
     }
 
@@ -234,8 +243,28 @@ PRAGMA optimize;
         let mut reply_text = String::new();
         let mut reply_html = String::new();
 
-        for url in urls.into_iter().take(MAX_URL_COUNTS_PER_MESSAGE) {
+        for mut url in urls.into_iter().take(MAX_URL_COUNTS_PER_MESSAGE) {
             info!("Fetching URL preview for: {url}");
+
+            let mut url_str = Cow::from(url.as_str());
+            for (from, to) in self.rewrite_url.iter() {
+                match from.replace_all(&url_str, to) {
+                    Cow::Borrowed(_) => (),
+                    Cow::Owned(result) => {
+                        debug!("URL rewrite: {url_str} => {from} => {result}");
+                        url_str = result.into()
+                    }
+                }
+            }
+            if let Cow::Owned(url_str) = url_str {
+                url = match Url::parse(&url_str) {
+                    Ok(url) => url,
+                    Err(err) => {
+                        error!("Failed to parse the URL after rewrite: {err}");
+                        continue;
+                    }
+                }
+            }
 
             // Previously we used Synapse's URL preview API.
             //

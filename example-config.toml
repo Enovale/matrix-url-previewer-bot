@@ -13,3 +13,14 @@ crawler_max_size = 10485760
 
 # The User-Agent string for outgoing URL preview requests.
 crawler_user_agent = "Mozilla/5.0 (compatible; Matrix-URL-Previewer-Bot; +https://github.com/m13253/matrix-url-previewer-bot; like Discordbot, TelegramBot, Twitterbot)"
+
+# URL rewrite rules.
+# Please use https://regex101.com (set to Rust mode) to validate your regex.
+rewrite_url = [
+    ['(?i)^https?://(?:www\.)?b23\.tv/(.*)', "https://b23bb.tv/$1"],
+    ['(?i)^https?://(?:www\.)?bilibili\.com/(.*)', "https://bilibilibb.com/$1"],
+    ['(?i)^https?://(?:www\.)?bsky\.app/(.*)', "https://fxbsky.app/$1"],
+    ['(?i)^https?://(?:www\.)?instagram\.com/(.*)', "https://www.ddinstagram.com/$1"],
+    ['(?i)^https?://(?:www\.)?twitter\.com/(.*)', "https://fxtwitter.com/$1"],
+    ['(?i)^https?://(?:www\.)?x\.com/(.*)', "https://fixupx.com/$1"],
+]
