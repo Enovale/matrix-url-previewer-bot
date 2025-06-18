@@ -1,0 +1,15 @@
+# The path to store Matrix-related database.
+# Must not be shared with any other bots.
+data_dir = "./_data"
+
+# The language preferences for outgoing URL preview requests.
+crawler_accept_language = "en-US,en;q=0.9"
+
+# (Optional) A web proxy server for URL preview requests.
+crawler_proxy = "socks5://127.0.0.1:1080"
+
+# The maximum number of bytes to read for each URL preview request.
+crawler_max_size = 10485760
+
+# The User-Agent string for outgoing URL preview requests.
+crawler_user_agent = "Mozilla/5.0 (compatible; Matrix-URL-Previewer-Bot; +https://github.com/m13253/matrix-url-previewer-bot; like Discordbot, TelegramBot, Twitterbot)"
