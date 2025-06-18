@@ -1,56 +1,55 @@
-use std::path::Path;
-use std::sync::LazyLock;
+use std::str::FromStr;
+use std::sync::{Arc, LazyLock};
+use std::time::Duration;
 
 use deadpool_sqlite::rusqlite::OptionalExtension;
-use deadpool_sqlite::{Config, Pool, Runtime};
+use deadpool_sqlite::{Pool, Runtime};
+use encoding_rs::Encoding;
 use eyre::{Report, Result};
 use indexmap::IndexSet;
+use itertools::Itertools;
 use matrix_sdk::Room;
-use matrix_sdk::ruma::api::client::authenticated_media::get_media_preview;
 use matrix_sdk::ruma::events::Mentions;
 use matrix_sdk::ruma::events::relation::{Replacement, Thread};
 use matrix_sdk::ruma::events::room::message::{Relation, RoomMessageEventContentWithoutRelation};
 use matrix_sdk::ruma::{EventId, OwnedEventId};
+use mime::Mime;
+use moka::future::{Cache, CacheBuilder};
 use regex::Regex;
-use serde::Deserialize;
-use serde_with::{DefaultOnError, serde_as};
-use tracing::{Instrument, error, info, instrument};
+use scraper::{Html, Selector};
+use tracing::{Instrument, error, info, instrument, warn};
 use url::Url;
 
-use crate::common::{MAX_RESPONSE_TEXT_BYTES, MAX_URL_COUNTS_PER_MESSAGE, SAFE_URL_LENGTH};
-use crate::html_escape;
+use crate::common::{
+    MAX_RESPONSE_TEXT_BYTES, MAX_RESPONSE_TEXT_CHARS, MAX_URL_COUNTS_PER_MESSAGE, SAFE_URL_LENGTH,
+};
+use crate::{config, html_escape};
 
-#[derive(Clone)]
 pub struct Worker {
+    cache: Cache<Url, Option<OpenGraph>>,
+    config: Arc<config::Config>,
     db: Pool,
+    reqwest_client: reqwest::Client,
 }
 
-#[serde_as]
-#[derive(Clone, Default, Deserialize)]
+#[derive(Clone, Debug)]
 struct OpenGraph {
-    #[serde_as(deserialize_as = "DefaultOnError")]
-    #[serde(rename = "og:description", default)]
     pub description: String,
-
-    #[serde_as(deserialize_as = "DefaultOnError")]
-    #[serde(rename = "og:site_name", default)]
     pub site_name: String,
-
-    #[serde_as(deserialize_as = "DefaultOnError")]
-    #[serde(rename = "og:title", default)]
     pub title: String,
-
-    #[serde_as(deserialize_as = "DefaultOnError")]
-    #[serde(rename = "og:url", default)]
     pub url: String,
 }
 
 impl Worker {
     #[instrument(skip_all)]
-    pub async fn new(data_path: &Path) -> Result<Worker> {
-        let cfg = Config::new(data_path.join("url-previewer.sqlite3"));
-        let pool = cfg.create_pool(Runtime::Tokio1)?;
-        let conn = pool.get().await?;
+    pub async fn new(config: Arc<config::Config>) -> Result<Arc<Worker>> {
+        let cache = CacheBuilder::new(1024)
+            .time_to_live(Duration::from_secs(3600))
+            .build();
+
+        let db_config = deadpool_sqlite::Config::new(config.data_dir.join("url-previewer.sqlite3"));
+        let db = db_config.create_pool(Runtime::Tokio1)?;
+        let conn = db.get().await?;
         conn.interact(|conn| {
             conn.execute_batch(
                 "PRAGMA journal_mode = WAL;
@@ -72,12 +71,31 @@ PRAGMA optimize;
         })
         .await
         .unwrap()?;
-        Ok(Worker { db: pool })
+
+        let mut reqwest_headers = reqwest::header::HeaderMap::new();
+        reqwest_headers.insert(
+            reqwest::header::ACCEPT_LANGUAGE,
+            config.crawler_accept_language.parse()?,
+        );
+        let mut reqwest_builder = reqwest::ClientBuilder::new()
+            .default_headers(reqwest_headers)
+            .user_agent(&config.crawler_user_agent);
+        if !config.crawler_proxy.is_empty() {
+            reqwest_builder = reqwest_builder.proxy(reqwest::Proxy::all(&config.crawler_proxy)?);
+        }
+        let reqwest_client = reqwest_builder.build()?;
+
+        Ok(Arc::new(Worker {
+            cache,
+            config,
+            db,
+            reqwest_client,
+        }))
     }
 
     #[instrument(skip_all)]
     pub async fn on_message(
-        &self,
+        self: Arc<Self>,
         room: Room,
         thread_id: Option<OwnedEventId>,
         original_event_id: OwnedEventId,
@@ -150,7 +168,7 @@ PRAGMA optimize;
             (response_id, false)
         };
 
-        tokio::spawn(Self::create_url_preview(
+        tokio::spawn(self.create_url_preview(
             room,
             original_event_link,
             response_id.clone(),
@@ -163,7 +181,7 @@ PRAGMA optimize;
 
     #[instrument(skip_all)]
     pub async fn on_deletion(
-        &self,
+        self: Arc<Self>,
         room: Room,
         original_event_id: &EventId,
     ) -> Result<Option<OwnedEventId>> {
@@ -206,6 +224,7 @@ PRAGMA optimize;
 
     #[instrument(skip_all)]
     async fn create_url_preview(
+        self: Arc<Self>,
         room: Room,
         original_event_link: String,
         response_id: OwnedEventId,
@@ -217,45 +236,71 @@ PRAGMA optimize;
 
         for url in urls.into_iter().take(MAX_URL_COUNTS_PER_MESSAGE) {
             info!("Fetching URL preview for: {url}");
-            let request = get_media_preview::v1::Request::new(url.to_string());
-            let response = match room
-                .client()
-                .send(request)
-                .with_request_config(Some(room.client().request_config().clone().disable_retry()))
-                .await
-            {
-                Ok(response) => response,
-                Err(err) => {
-                    error!("Failed to fetch URL preview for {url}: {err}");
-                    continue;
-                }
-            };
 
-            let Some(preview) = response.data.as_deref() else {
+            // Previously we used Synapse's URL preview API.
+            //
+            // let request = matrix_sdk::ruma::api::client::authenticated_media::get_media_preview::v1::Request::new(
+            //     url.to_string()
+            // );
+            // let response = match room
+            //     .client()
+            //     .send(request)
+            //     .with_request_config(Some(room.client().request_config().clone().disable_retry()))
+            //     .await
+            // {
+            //     Ok(response) => response,
+            //     Err(err) => {
+            //         error!("Failed to fetch URL preview for {url}: {err}");
+            //         continue;
+            //     }
+            // };
+            // let Some(preview) = response.data.as_deref() else {
+            //     continue;
+            // };
+            // info!("{preview}");
+            // let preview: OpenGraph = match serde_json::from_str(preview.get()) {
+            //     Ok(preview) => preview,
+            //     Err(err) => {
+            //         error!("Failed to parse URL preview for {url}: {err}");
+            //         continue;
+            //     }
+            // };
+
+            let Some(preview) = self
+                .cache
+                .get_with_by_ref(&url, self.clone().fetch_single_url_preview(url.clone()))
+                .await
+            else {
+                warn!("URL has no preview.");
                 continue;
             };
-            info!("{preview}");
-            let preview: OpenGraph = match serde_json::from_str(preview.get()) {
-                Ok(preview) => preview,
-                Err(err) => {
-                    error!("Failed to parse URL preview for {url}: {err}");
-                    continue;
-                }
-            };
+            info!("{preview:?}");
 
             // Extract metadata from OpenGraph, while keeping length limited
-            let mut bytes_remaining = MAX_RESPONSE_TEXT_BYTES;
-            let title =
-                Self::limit_text_length(Self::collapse_whitespace(&preview.title), bytes_remaining);
-            bytes_remaining = bytes_remaining.saturating_sub(title.len());
+            let (mut bytes_remaining, mut chars_remaining) =
+                (MAX_RESPONSE_TEXT_BYTES, MAX_RESPONSE_TEXT_CHARS);
+            let title = Self::limit_text_length(
+                Self::collapse_whitespace(&preview.title),
+                bytes_remaining,
+                chars_remaining,
+            );
+            (bytes_remaining, chars_remaining) = (
+                bytes_remaining.saturating_sub(title.len()),
+                chars_remaining.saturating_sub(title.chars().count()),
+            );
             let site_name = Self::limit_text_length(
                 Self::collapse_whitespace(&preview.site_name),
                 bytes_remaining,
+                chars_remaining,
             );
-            bytes_remaining = bytes_remaining.saturating_sub(title.len());
+            (bytes_remaining, chars_remaining) = (
+                bytes_remaining.saturating_sub(site_name.len()),
+                chars_remaining.saturating_sub(site_name.chars().count()),
+            );
             let description = Self::limit_text_length(
                 Self::collapse_whitespace(&preview.description),
                 bytes_remaining,
+                chars_remaining,
             );
             let canonical_url = Url::parse(&preview.url)
                 .ok()
@@ -323,6 +368,160 @@ PRAGMA optimize;
         }
     }
 
+    #[instrument(skip(self))]
+    async fn fetch_single_url_preview(self: Arc<Self>, url: Url) -> Option<OpenGraph> {
+        let timeout = tokio::time::sleep(self.config.crawler_timeout);
+        tokio::pin!(timeout);
+
+        // Send out the request
+        let mut response = tokio::select! {
+            _ = &mut timeout => {
+                error!("Failed to fetch URL preview for {url}: Request timed out.");
+                None
+            },
+            response = self.reqwest_client.get(url.clone()).send() => match response.and_then(|response| response.error_for_status()) {
+                Ok(response) => Some(response),
+                Err(err) => {
+                    error!("Failed to fetch URL preview for {url}: {err}");
+                    None
+                }
+            },
+        }?;
+
+        // Download the response
+        let content_type = response
+            .headers()
+            .get(reqwest::header::CONTENT_TYPE)
+            .and_then(|content_type| content_type.to_str().ok())
+            .unwrap_or_default();
+        let mut charset = Mime::from_str(content_type)
+            .unwrap_or(mime::TEXT_HTML)
+            .get_param(mime::CHARSET)
+            .and_then(|charset| Encoding::for_label(charset.as_str().as_bytes()))
+            .unwrap_or(encoding_rs::UTF_8);
+        let mut document = Vec::new();
+        while document.len() < self.config.crawler_max_size {
+            tokio::select! {
+                _ = &mut timeout => {
+                error!("Failed to fetch URL preview for {url}: Read timed out.");
+                    break;
+                },
+                chunk = response.chunk() => match chunk {
+                    Ok(Some(chunk)) => document.extend(chunk),
+                    Ok(None) => break,
+                    Err(err) => {
+                        error!("Failed to fetch URL preview for {url}: {err}");
+                        break;
+                    }
+                }
+            };
+        }
+        document.truncate(self.config.crawler_max_size);
+
+        // Determine the text encoding
+        let mut dom = Html::parse_document(&String::from_utf8_lossy(&document));
+        for element in dom
+            .select(&Selector::parse("meta[charset] meta[http-equiv=\"Content-Type\" i]").unwrap())
+        {
+            if let Some(value) = element.attr("charset") {
+                charset = Encoding::for_label(value.as_bytes()).unwrap_or(charset);
+            } else if let Some(value) = element.attr("content") {
+                charset = Mime::from_str(value)
+                    .unwrap_or(mime::TEXT_HTML)
+                    .get_param(mime::CHARSET)
+                    .and_then(|charset| Encoding::for_label(charset.as_str().as_bytes()))
+                    .unwrap_or(charset);
+            }
+        }
+        if charset != encoding_rs::UTF_8 {
+            dom = Html::parse_document(&charset.decode(&document).0);
+        }
+
+        // Selectors
+        static OG_DESCRIPTION: LazyLock<[Selector; 3]> = LazyLock::new(|| {
+            [
+                Selector::parse("meta[property=\"og:description\" i]").unwrap(),
+                Selector::parse("meta[property=\"twitter:description\" i]").unwrap(),
+                Selector::parse("meta[name=\"description\" i]").unwrap(),
+            ]
+        });
+        static OG_DESCRIPTION_FALLBACK: LazyLock<Selector> =
+            LazyLock::new(|| Selector::parse("body").unwrap());
+        static OG_SITE_NAME: LazyLock<Selector> =
+            LazyLock::new(|| Selector::parse("meta[property=\"og:site_name\" i]").unwrap());
+        static OG_TITLE: LazyLock<[Selector; 2]> = LazyLock::new(|| {
+            [
+                Selector::parse("meta[property=\"og:title\" i]").unwrap(),
+                Selector::parse("meta[property=\"twitter:title\" i]").unwrap(),
+            ]
+        });
+        static OG_TITLE_FALLBACK: LazyLock<[Selector; 4]> = LazyLock::new(|| {
+            [
+                Selector::parse("title").unwrap(),
+                Selector::parse("h1").unwrap(),
+                Selector::parse("h2").unwrap(),
+                Selector::parse("h3").unwrap(),
+            ]
+        });
+        static OG_URL: LazyLock<Selector> =
+            LazyLock::new(|| Selector::parse("meta[property=\"og:url\" i]").unwrap());
+
+        // Generate the output
+        // Ref: https://github.com/element-hq/synapse/blob/v1.132.0/synapse/media/preview_html.py#L237
+        Some(OpenGraph {
+            description: OG_DESCRIPTION
+                .iter()
+                .flat_map(|selector| dom.select(selector))
+                .flat_map(|element| element.attr("content"))
+                .filter(|&content| !content.is_empty())
+                .map(|content| content.to_owned())
+                .next()
+                .or_else(|| {
+                    dom.select(&OG_DESCRIPTION_FALLBACK)
+                        .map(|element| {
+                            Self::limit_text_length(
+                                Self::collapse_whitespace(&element.text().join(" ")),
+                                MAX_RESPONSE_TEXT_BYTES,
+                                MAX_RESPONSE_TEXT_CHARS,
+                            )
+                        })
+                        .next()
+                })
+                .unwrap_or_default()
+                .to_owned(),
+            site_name: dom
+                .select(&OG_SITE_NAME)
+                .flat_map(|element| element.attr("content"))
+                .filter(|&content| !content.is_empty())
+                .next()
+                .unwrap_or_default()
+                .to_owned(),
+            title: OG_TITLE
+                .iter()
+                .flat_map(|selector| dom.select(selector))
+                .flat_map(|element| element.attr("content"))
+                .filter(|&content| !content.is_empty())
+                .map(|content| content.to_owned())
+                .next()
+                .or_else(|| {
+                    OG_TITLE_FALLBACK
+                        .iter()
+                        .flat_map(|selector| dom.select(selector))
+                        .map(|element| element.text().collect::<String>())
+                        .filter(|content| !content.is_empty())
+                        .next()
+                })
+                .unwrap_or_default(),
+            url: dom
+                .select(&OG_URL)
+                .flat_map(|element| element.attr("content"))
+                .filter(|&content| !content.is_empty())
+                .next()
+                .unwrap_or_default()
+                .to_owned(),
+        })
+    }
+
     fn collapse_whitespace(s: &str) -> String {
         // https://developer.mozilla.org/en-US/docs/Glossary/Whitespace
         static CONSECUTIVE_WHITESPACES: LazyLock<Regex> =
@@ -333,13 +532,19 @@ PRAGMA optimize;
             .to_owned()
     }
 
-    fn limit_text_length(mut s: String, max_bytes: usize) -> String {
+    fn limit_text_length(mut s: String, mut max_bytes: usize, max_chars: usize) -> String {
+        for (c, (b, _)) in s.char_indices().enumerate() {
+            if c >= max_chars {
+                max_bytes = max_bytes.min(b);
+                break;
+            }
+        }
         if s.len() <= max_bytes {
             return s;
         }
         for i in (0..max_bytes.saturating_sub(3)).rev() {
             if s.is_char_boundary(i) {
-                s.drain(i..);
+                s.truncate(i);
                 if !s.ends_with("…") {
                     s.push_str("…");
                 }
