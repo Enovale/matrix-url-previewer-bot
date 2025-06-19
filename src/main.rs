@@ -184,7 +184,7 @@ async fn on_message(
         return Ok(());
     }
 
-    let (original_event_id, thread_id, new_content) = match event.content.relates_to {
+    let (original_event_id, thread_id, latest_content) = match event.content.relates_to {
         Some(Relation::Replacement(replacement)) => {
             (replacement.event_id, None, replacement.new_content)
         }
@@ -195,7 +195,7 @@ async fn on_message(
         ),
         _ => (event.event_id, None, event.content.into()),
     };
-    let MessageType::Text(text) = new_content.msgtype else {
+    let MessageType::Text(text) = latest_content.msgtype else {
         return Ok(());
     };
     let html = text
@@ -204,11 +204,11 @@ async fn on_message(
     let urls = if let Some(html) = html {
         extract_url::extract_urls_from_html(&html.body)
     } else {
-        let mut urls = IndexSet::new();
-        for line in text.body.lines().skip_while(|line| line.starts_with("> ")) {
-            urls.extend(extract_url::extract_urls_from_text(line));
-        }
-        urls
+        text.body
+            .lines()
+            .skip_while(|&line| line.starts_with("> "))
+            .flat_map(extract_url::extract_urls_from_text)
+            .collect::<IndexSet<Url>>()
     };
 
     info!(
@@ -218,7 +218,6 @@ async fn on_message(
     ctx.0
         .on_message(room, thread_id, original_event_id, urls)
         .await?;
-
     Ok(())
 }
 

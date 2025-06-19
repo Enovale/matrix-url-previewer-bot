@@ -22,28 +22,18 @@ pub fn extract_urls_from_html(html: &str) -> IndexSet<Url> {
     let mut links = IndexSet::new();
 
     let mut node = dom.tree.root();
-    let mut counter = 0_usize;
-    loop {
-        counter += 1;
-        if counter >= 1048576 {
-            // A Matrix message can only be 64 KiB long.
-            panic!("Bug: HTML extractor didn't stop after visiting 1 million DOM nodes.");
-        }
-
+    for _ in 0..1048576_usize {
         let mut skip_children = false;
         match node.value() {
             Node::Text(text) => links.extend(extract_urls_from_text(&text)),
             Node::Element(element) => match element.name().to_ascii_lowercase().as_str() {
                 "a" => {
-                    for (k, v) in element.attrs() {
-                        if k.eq_ignore_ascii_case("href") {
-                            skip_children = true;
-                            links.extend(validate_url(v));
-                            break;
-                        }
+                    if let Some(href) = element.attr("href") {
+                        skip_children = true;
+                        links.extend(validate_url(href));
                     }
                 }
-                "blockquote" | "code" | "del" | "mx-reply" | "pre" => skip_children = true,
+                "code" | "del" | "mx-reply" | "pre" => skip_children = true,
                 _ => (),
             },
             _ => (),
@@ -66,6 +56,8 @@ pub fn extract_urls_from_html(html: &str) -> IndexSet<Url> {
             }
         }
     }
+    // A Matrix message can only be 64 KiB long.
+    panic!("Bug: HTML extractor didn't stop after visiting 1 million DOM nodes.");
 }
 
 /// We use the CommmonMark definition to extract URLs:

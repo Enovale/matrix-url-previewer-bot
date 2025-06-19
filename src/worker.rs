@@ -398,6 +398,41 @@ PRAGMA optimize;
 
     #[instrument(skip(self))]
     async fn fetch_single_url_preview(self: Arc<Self>, url: Url) -> Option<OpenGraph> {
+        // Selectors
+        static META_CHARSET: LazyLock<Selector> =
+            LazyLock::new(|| Selector::parse("meta[charset]").unwrap());
+        static META_HTTP_EQUIV_CONTENT_TYPE: LazyLock<Selector> =
+            LazyLock::new(|| Selector::parse("meta[http-equiv=\"Content-Type\" i]").unwrap());
+        static META_OG_DESCRIPTION: LazyLock<[Selector; 3]> = LazyLock::new(|| {
+            [
+                Selector::parse("meta[property=\"og:description\" i]").unwrap(),
+                Selector::parse("meta[property=\"twitter:description\" i]").unwrap(),
+                Selector::parse("meta[name=\"description\" i]").unwrap(),
+            ]
+        });
+        static META_OG_DESCRIPTION_FALLBACK: LazyLock<Selector> =
+            LazyLock::new(|| Selector::parse("body").unwrap());
+        static META_OG_SITE_NAME: LazyLock<Selector> =
+            LazyLock::new(|| Selector::parse("meta[property=\"og:site_name\" i]").unwrap());
+        static META_OG_TITLE: LazyLock<[Selector; 2]> = LazyLock::new(|| {
+            [
+                Selector::parse("meta[property=\"og:title\" i]").unwrap(),
+                Selector::parse("meta[property=\"twitter:title\" i]").unwrap(),
+            ]
+        });
+        static META_OG_TITLE_FALLBACK: LazyLock<[Selector; 4]> = LazyLock::new(|| {
+            [
+                Selector::parse("title").unwrap(),
+                Selector::parse("h1").unwrap(),
+                Selector::parse("h2").unwrap(),
+                Selector::parse("h3").unwrap(),
+            ]
+        });
+        static META_OG_URL: LazyLock<Selector> =
+            LazyLock::new(|| Selector::parse("meta[property=\"og:url\" i]").unwrap());
+        static META_OG_URL_FALLBACK: LazyLock<Selector> =
+            LazyLock::new(|| Selector::parse("link[rel=\"canonical\" i]").unwrap());
+
         let timeout = tokio::time::sleep(self.config.crawler_timeout);
         tokio::pin!(timeout);
 
@@ -417,15 +452,18 @@ PRAGMA optimize;
         }?;
 
         // Download the response
-        let content_type = response
+        let charset = response
             .headers()
             .get(reqwest::header::CONTENT_TYPE)
-            .and_then(|content_type| content_type.to_str().ok())
-            .unwrap_or_default();
-        let mut charset = Mime::from_str(content_type)
-            .unwrap_or(mime::TEXT_HTML)
-            .get_param(mime::CHARSET)
-            .and_then(|charset| Encoding::for_label(charset.as_str().as_bytes()))
+            .and_then(|content_type| {
+                Encoding::for_label(
+                    Mime::from_str(&String::from_utf8_lossy(content_type.as_bytes()))
+                        .unwrap_or(mime::TEXT_HTML)
+                        .get_param(mime::CHARSET)?
+                        .as_str()
+                        .as_bytes(),
+                )
+            })
             .unwrap_or(encoding_rs::UTF_8);
         let mut document = Vec::new();
         while document.len() < self.config.crawler_max_size {
@@ -447,59 +485,33 @@ PRAGMA optimize;
         document.truncate(self.config.crawler_max_size);
 
         // Determine the text encoding
-        let mut dom = Html::parse_document(&String::from_utf8_lossy(&document));
-        for element in dom
-            .select(&Selector::parse("meta[charset] meta[http-equiv=\"Content-Type\" i]").unwrap())
-        {
-            if let Some(value) = element.attr("charset") {
-                charset = Encoding::for_label(value.as_bytes()).unwrap_or(charset);
-            } else if let Some(value) = element.attr("content") {
-                charset = Mime::from_str(value)
-                    .unwrap_or(mime::TEXT_HTML)
-                    .get_param(mime::CHARSET)
-                    .and_then(|charset| Encoding::for_label(charset.as_str().as_bytes()))
-                    .unwrap_or(charset);
-            }
-        }
+        let mut dom = Html::parse_document(&encoding_rs::UTF_8.decode(&document).0);
+        let charset = dom
+            .select(&META_CHARSET)
+            .filter_map(|element| Encoding::for_label(element.attr("charset")?.as_bytes()))
+            .next()
+            .or_else(|| {
+                dom.select(&META_HTTP_EQUIV_CONTENT_TYPE)
+                    .filter_map(|element| {
+                        Encoding::for_label(
+                            Mime::from_str(element.attr("content")?)
+                                .ok()?
+                                .get_param(mime::CHARSET)?
+                                .as_str()
+                                .as_bytes(),
+                        )
+                    })
+                    .next()
+            })
+            .unwrap_or(charset);
         if charset != encoding_rs::UTF_8 {
             dom = Html::parse_document(&charset.decode(&document).0);
         }
 
-        // Selectors
-        static OG_DESCRIPTION: LazyLock<[Selector; 3]> = LazyLock::new(|| {
-            [
-                Selector::parse("meta[property=\"og:description\" i]").unwrap(),
-                Selector::parse("meta[property=\"twitter:description\" i]").unwrap(),
-                Selector::parse("meta[name=\"description\" i]").unwrap(),
-            ]
-        });
-        static OG_DESCRIPTION_FALLBACK: LazyLock<Selector> =
-            LazyLock::new(|| Selector::parse("body").unwrap());
-        static OG_SITE_NAME: LazyLock<Selector> =
-            LazyLock::new(|| Selector::parse("meta[property=\"og:site_name\" i]").unwrap());
-        static OG_TITLE: LazyLock<[Selector; 2]> = LazyLock::new(|| {
-            [
-                Selector::parse("meta[property=\"og:title\" i]").unwrap(),
-                Selector::parse("meta[property=\"twitter:title\" i]").unwrap(),
-            ]
-        });
-        static OG_TITLE_FALLBACK: LazyLock<[Selector; 4]> = LazyLock::new(|| {
-            [
-                Selector::parse("title").unwrap(),
-                Selector::parse("h1").unwrap(),
-                Selector::parse("h2").unwrap(),
-                Selector::parse("h3").unwrap(),
-            ]
-        });
-        static OG_URL: LazyLock<Selector> =
-            LazyLock::new(|| Selector::parse("meta[property=\"og:url\" i]").unwrap());
-        static OG_URL_FALLBACK: LazyLock<Selector> =
-            LazyLock::new(|| Selector::parse("link[rel=\"canonical\" i]").unwrap());
-
         // Generate the output
         // Ref: https://github.com/element-hq/synapse/blob/v1.132.0/synapse/media/preview_html.py#L237
         Some(OpenGraph {
-            description: OG_DESCRIPTION
+            description: META_OG_DESCRIPTION
                 .iter()
                 .flat_map(|selector| dom.select(selector))
                 .filter_map(|element| element.attr("content"))
@@ -507,7 +519,7 @@ PRAGMA optimize;
                 .map(|content| content.to_owned())
                 .next()
                 .or_else(|| {
-                    dom.select(&OG_DESCRIPTION_FALLBACK)
+                    dom.select(&META_OG_DESCRIPTION_FALLBACK)
                         .map(|element| {
                             Self::limit_text_length(
                                 Self::collapse_whitespace(&element.text().join(" ")),
@@ -520,13 +532,13 @@ PRAGMA optimize;
                 .unwrap_or_default()
                 .to_owned(),
             site_name: dom
-                .select(&OG_SITE_NAME)
+                .select(&META_OG_SITE_NAME)
                 .filter_map(|element| element.attr("content"))
                 .filter(|&content| !content.is_empty())
                 .next()
                 .unwrap_or_default()
                 .to_owned(),
-            title: OG_TITLE
+            title: META_OG_TITLE
                 .iter()
                 .flat_map(|selector| dom.select(selector))
                 .filter_map(|element| element.attr("content"))
@@ -534,7 +546,7 @@ PRAGMA optimize;
                 .map(|content| content.to_owned())
                 .next()
                 .or_else(|| {
-                    OG_TITLE_FALLBACK
+                    META_OG_TITLE_FALLBACK
                         .iter()
                         .flat_map(|selector| dom.select(selector))
                         .map(|element| element.text().collect::<String>())
@@ -543,12 +555,12 @@ PRAGMA optimize;
                 })
                 .unwrap_or_default(),
             url: dom
-                .select(&OG_URL)
+                .select(&META_OG_URL)
                 .filter_map(|element| element.attr("content"))
                 .filter(|&content| !content.is_empty())
                 .next()
                 .or_else(|| {
-                    dom.select(&OG_URL_FALLBACK)
+                    dom.select(&META_OG_URL_FALLBACK)
                         .filter_map(|element| element.attr("href"))
                         .filter(|&content| !content.is_empty())
                         .next()
