@@ -18,15 +18,14 @@ use crate::common::SAFE_URL_LENGTH;
 #[instrument]
 pub fn extract_urls_from_html(html: &str) -> IndexSet<Url> {
     let dom = Html::parse_fragment(html);
-    let mut stack = Vec::new();
     let mut links = IndexSet::new();
-
+    let mut stack = Vec::new();
     let mut node = dom.tree.root();
     for _ in 0..1048576_usize {
         let mut skip_children = false;
         match node.value() {
             Node::Text(text) => links.extend(extract_urls_from_text(&text)),
-            Node::Element(element) => match element.name().to_ascii_lowercase().as_str() {
+            Node::Element(element) => match element.name() {
                 "a" => {
                     if let Some(href) = element.attr("href") {
                         skip_children = true;
