@@ -210,11 +210,11 @@ async fn on_message(
         //     .skip_while(|&line| line.starts_with("> "))
         //     .flat_map(extract_url::extract_urls_from_text)
         //     .collect::<IndexSet<Url>>()
-        let mut urls = IndexSet::new();
-        for line in text.body.lines().skip_while(|&line| line.starts_with("> ")) {
-            urls.extend(extract_url::extract_urls_from_text(line));
-        }
-        urls
+        text.body
+            .lines()
+            .skip_while(|&line| line.starts_with("> "))
+            .flat_map(|line| extract_url::extract_urls_from_text(line))
+            .collect::<IndexSet<Url>>()
     };
 
     info!(
