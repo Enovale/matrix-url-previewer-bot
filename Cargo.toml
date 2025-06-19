@@ -10,7 +10,6 @@ deadpool-sqlite = { version = "*", features = ["tracing"] }
 encoding_rs = "0.8.35"
 eyre = "0.6.12"
 indexmap = "2.9.0"
-itertools = "0.14.0"
 matrix-sdk = { version = "0.12.0", features = ["eyre", "socks"] }
 matrixbot-ezlogin = "0.3.7"
 mime = "0.3.17"

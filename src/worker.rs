@@ -7,7 +7,6 @@ use deadpool_sqlite::{Pool, Runtime};
 use encoding_rs::Encoding;
 use eyre::{Report, Result};
 use indexmap::IndexSet;
-use itertools::Itertools;
 use matrix_sdk::Room;
 use matrix_sdk::ruma::events::Mentions;
 use matrix_sdk::ruma::events::relation::{Replacement, Thread};
