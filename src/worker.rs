@@ -410,8 +410,6 @@ PRAGMA optimize;
                 Selector::parse("meta[name=\"description\" i]").unwrap(),
             ]
         });
-        static META_OG_DESCRIPTION_FALLBACK: LazyLock<Selector> =
-            LazyLock::new(|| Selector::parse("body").unwrap());
         static META_OG_SITE_NAME: LazyLock<Selector> =
             LazyLock::new(|| Selector::parse("meta[property=\"og:site_name\" i]").unwrap());
         static META_OG_TITLE: LazyLock<[Selector; 2]> = LazyLock::new(|| {
@@ -516,19 +514,7 @@ PRAGMA optimize;
                 .flat_map(|selector| dom.select(selector))
                 .filter_map(|element| element.attr("content"))
                 .filter(|&content| !content.is_empty())
-                .map(|content| content.to_owned())
                 .next()
-                .or_else(|| {
-                    dom.select(&META_OG_DESCRIPTION_FALLBACK)
-                        .map(|element| {
-                            Self::limit_text_length(
-                                Self::collapse_whitespace(&element.text().join(" ")),
-                                MAX_RESPONSE_TEXT_BYTES,
-                                MAX_RESPONSE_TEXT_CHARS,
-                            )
-                        })
-                        .next()
-                })
                 .unwrap_or_default()
                 .to_owned(),
             site_name: dom
