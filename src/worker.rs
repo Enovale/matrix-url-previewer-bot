@@ -1,7 +1,6 @@
 use std::borrow::Cow;
 use std::str::FromStr;
 use std::sync::{Arc, LazyLock};
-use std::time::Duration;
 
 use deadpool_sqlite::rusqlite::OptionalExtension;
 use deadpool_sqlite::{Pool, Runtime};
@@ -45,8 +44,8 @@ struct OpenGraph {
 impl Worker {
     #[instrument(skip_all)]
     pub async fn new(config: Arc<config::Config>) -> Result<Arc<Worker>> {
-        let cache = CacheBuilder::new(1024)
-            .time_to_live(Duration::from_secs(3600))
+        let cache = CacheBuilder::new(config.cache_entries)
+            .time_to_live(config.cache_duration)
             .build();
 
         let db_config = deadpool_sqlite::Config::new(config.data_dir.join("url-previewer.sqlite3"));
@@ -494,6 +493,8 @@ PRAGMA optimize;
         });
         static OG_URL: LazyLock<Selector> =
             LazyLock::new(|| Selector::parse("meta[property=\"og:url\" i]").unwrap());
+        static OG_URL_FALLBACK: LazyLock<Selector> =
+            LazyLock::new(|| Selector::parse("link[rel=\"canonical\" i]").unwrap());
 
         // Generate the output
         // Ref: https://github.com/element-hq/synapse/blob/v1.132.0/synapse/media/preview_html.py#L237
@@ -501,7 +502,7 @@ PRAGMA optimize;
             description: OG_DESCRIPTION
                 .iter()
                 .flat_map(|selector| dom.select(selector))
-                .flat_map(|element| element.attr("content"))
+                .filter_map(|element| element.attr("content"))
                 .filter(|&content| !content.is_empty())
                 .map(|content| content.to_owned())
                 .next()
@@ -520,7 +521,7 @@ PRAGMA optimize;
                 .to_owned(),
             site_name: dom
                 .select(&OG_SITE_NAME)
-                .flat_map(|element| element.attr("content"))
+                .filter_map(|element| element.attr("content"))
                 .filter(|&content| !content.is_empty())
                 .next()
                 .unwrap_or_default()
@@ -528,7 +529,7 @@ PRAGMA optimize;
             title: OG_TITLE
                 .iter()
                 .flat_map(|selector| dom.select(selector))
-                .flat_map(|element| element.attr("content"))
+                .filter_map(|element| element.attr("content"))
                 .filter(|&content| !content.is_empty())
                 .map(|content| content.to_owned())
                 .next()
@@ -543,9 +544,15 @@ PRAGMA optimize;
                 .unwrap_or_default(),
             url: dom
                 .select(&OG_URL)
-                .flat_map(|element| element.attr("content"))
+                .filter_map(|element| element.attr("content"))
                 .filter(|&content| !content.is_empty())
                 .next()
+                .or_else(|| {
+                    dom.select(&OG_URL_FALLBACK)
+                        .filter_map(|element| element.attr("href"))
+                        .filter(|&content| !content.is_empty())
+                        .next()
+                })
                 .unwrap_or_default()
                 .to_owned(),
         })
