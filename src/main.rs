@@ -204,11 +204,17 @@ async fn on_message(
     let urls = if let Some(html) = html {
         extract_url::extract_urls_from_html(&html.body)
     } else {
-        text.body
-            .lines()
-            .skip_while(|&line| line.starts_with("> "))
-            .flat_map(extract_url::extract_urls_from_text)
-            .collect::<IndexSet<Url>>()
+        // This code causes Internal Compiler Error on Rustc 1.87.0:
+        // text.body
+        //     .lines()
+        //     .skip_while(|&line| line.starts_with("> "))
+        //     .flat_map(extract_url::extract_urls_from_text)
+        //     .collect::<IndexSet<Url>>()
+        let mut urls = IndexSet::new();
+        for line in text.body.lines().skip_while(|&line| line.starts_with("> ")) {
+            urls.extend(extract_url::extract_urls_from_text(line));
+        }
+        urls
     };
 
     info!(
