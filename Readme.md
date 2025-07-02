@@ -6,7 +6,7 @@ A matrix bot that serves URL previews from a trusted homeserver to the whole roo
 
 [Matrix](https://matrix.org) is a protocol to build messaging apps, similar to Discord and WhatsApp.
 
-However, Matrix operates like email — different organizations allow users to register Matrix accounts under their servers, and different organizations can communicate with each other.
+However, Matrix operates like email — different organizations operates Matrix servers independently, but users across organizations can communicate with each other.
 
 Matrix-URL-Previewer-Bot extracts links from Matrix chatrooms and display previews like this:
 
