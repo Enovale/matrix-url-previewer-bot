@@ -105,6 +105,6 @@ Due to the distributed nature of Matrix, HTTP requests using our User-Agent may 
 
    This is because Matrix doesn’t yet support mixing images and text in a single encrypted message.
 
-2. When a user edits their message in quick succession, a race condition may prevent Matrix-URL-Previewer-Bot from correctly respond to the last edit.
+2. When a user edits their message in a quick succession, a race condition may prevent Matrix-URL-Previewer-Bot from correctly respond to the last edit.
 
    The user can workaround this issue by editing the affected message one more time.
