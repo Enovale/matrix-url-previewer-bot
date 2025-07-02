@@ -20,7 +20,7 @@ Due to the distributed nature of Matrix, HTTP requests using our User-Agent may 
 
 2. You may employ **rate-limiting**, because a well-behaved Matrix-URL-Previewer-Bot program should never request the same URL repeatedly within 1 hour. 
 
-3. You may prevent malicious crawlers by serving only the **page title** and the **[Open Graph metadata](https://ogp.me)**, omitting the page body, because Matrix-URL-Previewer-Bot does not need page body.
+3. You may prevent malicious crawlers by serving only the **page title** and the **[Open Graph metadata](https://ogp.me)**, omitting the page body, because Matrix-URL-Previewer-Bot doesn’t need page body.
 
 ## Benefits of using Matrix-URL-Previewer-Bot over Synapse’s built-in URL previewer
 
@@ -36,7 +36,7 @@ Due to the distributed nature of Matrix, HTTP requests using our User-Agent may 
 
 1. Install the Rust development environment on your server.
 
-   Alternatively, if your server isn't powerful enough for the Rust compiler, you can also build it statically elsewhere and transfer the compiled program to the server. The details are not discussed here.
+   Alternatively, if your server isn't powerful enough for the Rust compiler, you can also build it statically elsewhere and transfer the compiled program to the server. The detailed steps are omitted here.
 
 2. Create a Matrix account for the bot. I suggest registering your bot on [a self-hosted Synapse server](https://element-hq.github.io/synapse/latest/setup/installation.html).
 
