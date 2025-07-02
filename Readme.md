@@ -8,7 +8,7 @@ A matrix bot that serves URL previews from a trusted homeserver to the whole roo
 
 Matrix-URL-Previewer-Bot extracts links from Matrix chatrooms and display previews like this:
 
-![Screenshot](img/screenshot.png =512x441)
+<img src="img/screenshot.png" width="512" height="441" alt="Screenshot" />
 
 Due to the distributed nature of Matrix, HTTP requests using our User-Agent may originate from all over the world. In case if you need to protect your website from malicious attackers and crawlers that pretend to be us, please consider the following:
 
