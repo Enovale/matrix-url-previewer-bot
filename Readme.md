@@ -1,6 +1,6 @@
 # Matrix-URL-Previewer-Bot
 
-A matrix bot that serves URL previews from a trusted homeserver to the whole room.
+A matrix bot that serves URL previews from a trusted server to the whole room.
 
 ## To website owners
 
