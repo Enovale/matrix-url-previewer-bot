@@ -4,7 +4,7 @@ A Matrix bot that serves URL previews from a trusted server to the whole room.
 
 ## To website owners
 
-[Matrix](https://matrix.org) is a protocol to build messaging apps, for example [Element and FluffyChat](https://matrix.org/ecosystem/clients/), similar to Discord and WhatsApp.
+[Matrix](https://matrix.org) is a protocol to build messaging apps, for example, [Element and FluffyChat](https://matrix.org/ecosystem/clients/), similar to Discord and WhatsApp.
 
 However, Matrix operates like email — different organizations operates Matrix servers independently, but users across organizations can communicate with each other.
 
