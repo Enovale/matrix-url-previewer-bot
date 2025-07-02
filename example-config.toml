@@ -24,7 +24,7 @@ crawler_user_agent = "Mozilla/5.0 (compatible; Matrix-URL-Previewer-Bot; +https:
 # Please use https://regex101.com to validate your regex. (Set its validator to Rust mode!)
 #
 # These are some popular link preview enhance services as examples.
-# These free services provide link previews for certain websites that are difficult to crawl.
+# These free services provide link previews for certain tricky websites.
 # However, if you care about privacy, you should host instances of them on your own server.
 rewrite_url = [
     ['(?i)^https?://(?:www\.)?b23\.tv/(.*)', "https://b23bb.tv/$1"],
