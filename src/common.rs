@@ -1,5 +1,3 @@
-pub const MAX_RESPONSE_TEXT_BYTES: usize = 800;
-
 pub const MAX_RESPONSE_TEXT_CHARS: usize = 200;
 
 // https://stackoverflow.com/a/417184/2557927

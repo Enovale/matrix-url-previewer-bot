@@ -19,9 +19,7 @@ use scraper::{Html, Selector};
 use tracing::{Instrument, debug, error, info, instrument, warn};
 use url::Url;
 
-use crate::common::{
-    MAX_RESPONSE_TEXT_BYTES, MAX_RESPONSE_TEXT_CHARS, MAX_URL_COUNTS_PER_MESSAGE, SAFE_URL_LENGTH,
-};
+use crate::common::{MAX_RESPONSE_TEXT_CHARS, MAX_URL_COUNTS_PER_MESSAGE, SAFE_URL_LENGTH};
 use crate::{config, html_escape};
 
 pub struct Worker {
@@ -304,29 +302,19 @@ PRAGMA optimize;
             info!("{preview:?}");
 
             // Extract metadata from OpenGraph, while keeping length limited
-            let (mut bytes_remaining, mut chars_remaining) =
-                (MAX_RESPONSE_TEXT_BYTES, MAX_RESPONSE_TEXT_CHARS);
-            let title = Self::limit_text_length(
+            let mut chars_remaining = MAX_RESPONSE_TEXT_CHARS;
+            let title = Self::limit_text_len_chars(
                 Self::collapse_whitespace(&preview.title),
-                bytes_remaining,
                 chars_remaining,
             );
-            (bytes_remaining, chars_remaining) = (
-                bytes_remaining.saturating_sub(title.len()),
-                chars_remaining.saturating_sub(title.chars().count()),
-            );
-            let site_name = Self::limit_text_length(
+            chars_remaining = chars_remaining.saturating_sub(title.chars().count());
+            let site_name = Self::limit_text_len_chars(
                 Self::collapse_whitespace(&preview.site_name),
-                bytes_remaining,
                 chars_remaining,
             );
-            (bytes_remaining, chars_remaining) = (
-                bytes_remaining.saturating_sub(site_name.len()),
-                chars_remaining.saturating_sub(site_name.chars().count()),
-            );
-            let description = Self::limit_text_length(
+            chars_remaining = chars_remaining.saturating_sub(site_name.chars().count());
+            let description = Self::limit_text_len_chars(
                 Self::collapse_whitespace(&preview.description),
-                bytes_remaining,
                 chars_remaining,
             );
             let canonical_url = Url::parse(&preview.url)
@@ -565,13 +553,8 @@ PRAGMA optimize;
             .to_owned()
     }
 
-    fn limit_text_length(mut s: String, mut max_bytes: usize, max_chars: usize) -> String {
-        for (c, (b, _)) in s.char_indices().enumerate() {
-            if c >= max_chars {
-                max_bytes = max_bytes.min(b);
-                break;
-            }
-        }
+    #[allow(dead_code)] // Not in use yet
+    fn limit_text_len_bytes(mut s: String, max_bytes: usize) -> String {
         if s.len() <= max_bytes {
             return s;
         }
@@ -585,5 +568,25 @@ PRAGMA optimize;
             }
         }
         unreachable!();
+    }
+
+    fn limit_text_len_chars(mut s: String, max_chars: usize) -> String {
+        if s.is_empty() {
+            return s;
+        }
+        let Some(trunc_char) = max_chars.checked_sub(1) else {
+            return "…".to_owned();
+        };
+        let mut iter = s.char_indices();
+        let Some((trunc_byte, _)) = iter.nth(trunc_char) else {
+            return s;
+        };
+        if iter.next().is_some() {
+            s.truncate(trunc_byte);
+            if !s.ends_with("…") {
+                s.push_str("…");
+            }
+        }
+        s
     }
 }
