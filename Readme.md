@@ -73,7 +73,7 @@ Due to the distributed nature of Matrix, HTTP requests using our User-Agent may 
 
    Use a Matrix client, for example, [Element](https://matrix.org/ecosystem/clients/element/), to log into your bot account. Type in your recovery key when asked.
 
-   Set the profile name to “Link Preview” and profile picture to [transparent.png](img/transparent.png), a 68-byte transparent PNG image.
+   Set the profile name to “Link Preview” and the profile picture to [`transparent.png`](img/transparent.png), a 68-byte transparent PNG image.
 
 7. Remove any unverified registration session.
 
