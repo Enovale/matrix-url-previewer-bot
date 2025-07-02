@@ -302,20 +302,17 @@ PRAGMA optimize;
             info!("{preview:?}");
 
             // Extract metadata from OpenGraph, while keeping length limited
-            let mut chars_remaining = MAX_RESPONSE_TEXT_CHARS;
             let title = Self::limit_text_len_chars(
                 Self::collapse_whitespace(&preview.title),
-                chars_remaining,
+                MAX_RESPONSE_TEXT_CHARS,
             );
-            chars_remaining = chars_remaining.saturating_sub(title.chars().count());
             let site_name = Self::limit_text_len_chars(
                 Self::collapse_whitespace(&preview.site_name),
-                chars_remaining,
+                MAX_RESPONSE_TEXT_CHARS.saturating_sub(title.chars().count()),
             );
-            chars_remaining = chars_remaining.saturating_sub(site_name.chars().count());
             let description = Self::limit_text_len_chars(
                 Self::collapse_whitespace(&preview.description),
-                chars_remaining,
+                MAX_RESPONSE_TEXT_CHARS,
             );
             let canonical_url = Url::parse(&preview.url)
                 .ok()
