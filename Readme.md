@@ -14,9 +14,9 @@ Matrix-URL-Previewer-Bot extracts links from Matrix chatrooms and display previe
 
 Due to the distributed nature of Matrix, HTTP requests using our User-Agent may originate from all over the world. In case if you need to protect your website from malicious attackers and crawlers that pretend to be Matrix-URL-Previewer-Bot, please consider the following:
 
-1. You may identify requests by User-Agent keywords: `Matrix-URL-Previewer-Bot` or `Synapse (bot;`, but please understand that, they identify both legitimate Matrix-URL-Previewer-Bot and malicious ones pretenting to be Matrix-URL-Previewer-Bot.
-2. You may employ **rate-limiting**: A well-behaved Matrix-URL-Previewer-Bot program should never request the same URL repeatedly within 1 hour. 
-3. You may prevent malicious crawlers by only serving the **page title** and the **[Open Graph metadata](https://ogp.me)**: Matrix-URL-Previewer-Bot does not need page body.
+1. You may identify requests by the User-Agent keywords: `Matrix-URL-Previewer-Bot` or `Synapse (bot;`, but please understand that, they identify both legitimate Matrix-URL-Previewer-Bot and malicious ones pretenting to be Matrix-URL-Previewer-Bot.
+2. You may employ **rate-limiting**, because a well-behaved Matrix-URL-Previewer-Bot program should never request the same URL repeatedly within 1 hour. 
+3. You may prevent malicious crawlers by only serving the **page title** and the **[Open Graph metadata](https://ogp.me)**, because Matrix-URL-Previewer-Bot does not need page body.
 
 ## Benefits of using Matrix-URL-Previewer-Bot over Synapse’s built-in URL previewer
 
