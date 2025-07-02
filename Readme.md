@@ -83,9 +83,9 @@ Due to the distributed nature of Matrix, HTTP requests using our User-Agent may 
 
    Go to settings. In the Sessions tab, sign out of any unverified or unrecognized sessions.
 
-8. Join your desired chatroom.
+8. Join your desired chatrooms.
 
-   Matrix-URL-Previewer-Bot doesn’t respond to any room invitations to prevent abuse. Therefore, you need to use Element.
+   Matrix-URL-Previewer-Bot doesn’t respond to any room invitations to prevent abuse. Therefore, you need to join the chatrooms manually through Element.
 
 9. Test whether it works.
 
