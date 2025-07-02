@@ -3,8 +3,7 @@ use nom::branch::alt;
 use nom::bytes::complete::{tag, tag_no_case, take, take_while1};
 use nom::character::complete::char;
 use nom::combinator::{iterator, opt, recognize, value};
-use nom::multi::{many_till, many0_count, many1_count};
-use nom::sequence::preceded;
+use nom::multi::{many0_count, many1_count};
 use nom::{IResult, Parser};
 use scraper::{Html, Node};
 use tracing::instrument;
@@ -59,61 +58,48 @@ pub fn extract_urls_from_html(html: &str) -> IndexSet<Url> {
     panic!("Bug: HTML extractor didn't stop after visiting 1 million DOM nodes.");
 }
 
-/// We use the CommmonMark definition to extract URLs:
-/// 1. Either a `<URL>`, where `URL` contains no "<", ">", or whitespaces.
-/// 2. Or a bare `URL`, where `URL` can contain a balanced amount of "()", but terminated by any whitespace.
-///
-/// In both situations, we additionally forbid "<" or ">" inside `URL`, which is not in the CommonMark specification.
+/// We follow the behavior of Element to extract URLs:
+/// 1. Containing no whitespace.
+/// 2. Containing balanced amounts of "()", "<>", "[]", "{}".
 #[instrument]
 pub fn extract_urls_from_text(text: &str) -> impl Iterator<Item = Url> {
     iterator(
         text,
-        many_till(value((), take(1_usize)), parse_url_from_text).map(|(_skipped, parsed)| parsed),
+        alt((
+            parse_url_from_text.map(Option::Some),
+            value(None, take(1_usize)),
+        )),
     )
+    .flatten()
     .filter_map(validate_url)
 }
 
-#[instrument]
 fn parse_url_from_text(input: &str) -> IResult<&str, &str> {
-    alt((parse_url_in_angle_brackets, parse_url_bare)).parse(input)
-}
-
-#[instrument]
-fn parse_url_in_angle_brackets(input: &str) -> IResult<&str, &str> {
-    preceded(
-        char('<'),
-        recognize((
-            tag_no_case("http"),
-            opt(tag_no_case("s")),
-            char(':'),
-            many0_count(char('/')),
-            take_while1(|c| c != '<' && c != '>' && !char::is_whitespace(c)),
-        )),
-    )
-    .parse(input)
-}
-
-#[instrument]
-fn parse_url_bare(input: &str) -> IResult<&str, &str> {
     recognize((
         tag_no_case("http"),
         opt(tag_no_case("s")),
         char(':'),
         many0_count(char('/')),
-        many1_count(alt((parse_parenthesis, parse_non_parenthesis))),
+        many1_count(parse_delimited),
     ))
     .parse(input)
 }
 
-#[instrument]
-fn parse_parenthesis(input: &str) -> IResult<&str, &str> {
-    recognize((tag("("), parse_non_parenthesis, opt(tag(")")))).parse(input)
-}
-
-#[instrument]
-fn parse_non_parenthesis(input: &str) -> IResult<&str, &str> {
-    take_while1(|c| c != '(' && c != ')' && c != '<' && c != '>' && !char::is_whitespace(c))
-        .parse(input)
+fn parse_delimited(input: &str) -> IResult<&str, ()> {
+    alt((
+        value((), (tag("("), many0_count(parse_delimited), opt(tag(")")))),
+        value((), (tag("<"), many0_count(parse_delimited), opt(tag(">")))),
+        value((), (tag("["), many0_count(parse_delimited), opt(tag("]")))),
+        value((), (tag("{"), many0_count(parse_delimited), opt(tag("}")))),
+        value(
+            (),
+            take_while1(|c| {
+                !matches!(c, '(' | ')' | '<' | '>' | '[' | ']' | '{' | '}')
+                    && !char::is_whitespace(c)
+            }),
+        ),
+    ))
+    .parse(input)
 }
 
 #[instrument]
