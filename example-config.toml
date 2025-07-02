@@ -21,9 +21,9 @@ crawler_max_size = 10485760
 crawler_user_agent = "Mozilla/5.0 (compatible; Matrix-URL-Previewer-Bot; +https://github.com/m13253/matrix-url-previewer-bot; like Discordbot, TelegramBot, Twitterbot)"
 
 # URL rewrite rules.
-# Please use https://regex101.com (set to Rust mode) to validate your regex.
+# Please use https://regex101.com to validate your regex. (Set its validator to Rust mode!)
 #
-# These are some popular link preview enhance services as example.
+# These are some popular link preview enhance services as examples.
 # These free services provide link previews for certain websites that are difficult to crawl.
 # However, if you care about privacy, you should host instances of them on your own server.
 rewrite_url = [
