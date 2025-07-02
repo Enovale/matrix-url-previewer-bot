@@ -308,7 +308,7 @@ PRAGMA optimize;
             );
             let site_name = Self::limit_text_len_chars(
                 Self::collapse_whitespace(&preview.site_name),
-                MAX_RESPONSE_TEXT_CHARS.saturating_sub(title.chars().count()),
+                MAX_RESPONSE_TEXT_CHARS,
             );
             let description = Self::limit_text_len_chars(
                 Self::collapse_whitespace(&preview.description),
