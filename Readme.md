@@ -103,7 +103,7 @@ Due to the distributed nature of Matrix, HTTP requests using our User-Agent may 
 
 1. Matrix-URL-Previewer-Bot cannot preview images yet.
 
-   This is because Matrix doesn’t yet support mixing images and text in encrypted messages.
+   This is because Matrix doesn’t yet support mixing images and text in a single encrypted message.
 
 2. When a user edits their message in quick succession, a race condition may prevent Matrix-URL-Previewer-Bot from correctly respond the last edit.
 
