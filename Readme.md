@@ -4,7 +4,7 @@ A Matrix bot that serves URL previews from a trusted server to the whole room.
 
 ## To website owners
 
-[Matrix](https://matrix.org) is a protocol to build messaging apps, similar to Discord and WhatsApp.
+[Matrix](https://matrix.org) is a protocol to build messaging apps, for example [Element and FluffyChat](https://matrix.org/ecosystem/clients/), similar to Discord and WhatsApp.
 
 However, Matrix operates like email — different organizations operates Matrix servers independently, but users across organizations can communicate with each other.
 
@@ -14,8 +14,12 @@ Matrix-URL-Previewer-Bot extracts links from Matrix chatrooms and display previe
 
 Due to the distributed nature of Matrix, HTTP requests using our User-Agent may originate from all over the world. In case if you need to protect your website from malicious attackers and crawlers that pretend to be Matrix-URL-Previewer-Bot, please consider the following:
 
-1. You may identify requests by the User-Agent keywords: `Matrix-URL-Previewer-Bot` or `Synapse (bot;`, but please understand that, they identify both legitimate Matrix-URL-Previewer-Bot and malicious ones pretenting to be Matrix-URL-Previewer-Bot.
+1. You may identify requests by the User-Agent keywords `Matrix-URL-Previewer-Bot`, but please understand that, they identify both legitimate Matrix-URL-Previewer-Bot and malicious ones pretenting to be Matrix-URL-Previewer-Bot.
+
+   (Note: The User-Agent keyword `Synapse (bot;` used by [Synapse](https://github.com/element-hq/synapse) also belongs to Matrix-related apps for a similar purpose.)
+
 2. You may employ **rate-limiting**, because a well-behaved Matrix-URL-Previewer-Bot program should never request the same URL repeatedly within 1 hour. 
+
 3. You may prevent malicious crawlers by only serving the **page title** and the **[Open Graph metadata](https://ogp.me)**, because Matrix-URL-Previewer-Bot does not need page body.
 
 ## Benefits of using Matrix-URL-Previewer-Bot over Synapse’s built-in URL previewer
