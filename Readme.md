@@ -26,7 +26,7 @@ Due to the distributed nature of Matrix, HTTP requests using our User-Agent may 
 
 1. Supporting encrypted chatrooms without leaking information to untrusted homeservers.
 
-   We expect chatroom admins to operate Matrix-URL-Previewer-Bot. They are considered more trusted from a room member’s perspective.
+   We expect Matrix-URL-Previewer-Bot be operated by chatroom admins. They are considered more trusted, than the participating homeservers, from a room member’s perspective.
 
 2. Ensuring all members of a chatroom, no matter which homeserver they belong to, see the same URL preview.
 
