@@ -36,7 +36,7 @@ Due to the distributed nature of Matrix, HTTP requests using our User-Agent may 
 
 1. Install the Rust development environment on your server.
 
-   Alternatively, if your server isn't powerful enough for the Rust compiler, you can also build it statically elsewhere and transfer the compiled program to the server. The detailed steps are omitted here.
+   Alternatively, if your server isn’t powerful enough for the Rust compiler, you can also build it statically elsewhere and transfer the compiled program to the server. The detailed steps are omitted here.
 
 2. Create a Matrix account for the bot. I suggest registering your bot on [a self-hosted Synapse server](https://element-hq.github.io/synapse/latest/setup/installation.html).
 
