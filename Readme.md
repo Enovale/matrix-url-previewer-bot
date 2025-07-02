@@ -46,7 +46,7 @@ Due to the distributed nature of Matrix, HTTP requests using our User-Agent may 
 
    The bot account has to use password authentication. Multi-factor authentication and single sign-on are unsupported, as they can’t function unattended.
 
-3. Create a configuration file `config.toml` based on [example-config.toml](./example-config.toml).
+3. Create a configuration file `config.toml` based on [`example-config.toml`](./example-config.toml).
 
 4. Perform the setup procedure.
 
