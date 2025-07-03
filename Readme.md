@@ -20,7 +20,7 @@ Due to the distributed nature of Matrix, HTTP requests using our User-Agent may 
 
 2. You may impose **rate-limiting**, because a well-behaved Matrix-URL-Previewer-Bot caches the result for 1 hour by default.
 
-3. You may prevent malicious crawlers by serving only the **page title** and the **[Open Graph metadata](https://ogp.me)**, omitting the page body, because Matrix-URL-Previewer-Bot doesn’t need page body.
+3. You may prevent malicious crawlers by serving only the **page title** and the **[Open Graph metadata](https://ogp.me)**, omitting the page body, because Matrix-URL-Previewer-Bot doesn’t need the page body.
 
 ## Benefits of using Matrix-URL-Previewer-Bot over Synapse’s built-in URL previewer
 
