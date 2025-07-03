@@ -85,7 +85,7 @@ Due to the distributed nature of Matrix, HTTP requests using our User-Agent may 
 
    The `register_new_matrix_user` program mentioned above may have created an unverified session. This session should be removed to prevent encryption problems.
 
-   Go to settings. In the Sessions tab, sign out of any unverified or unrecognized sessions.
+   Go to settings. In the Sessions tab, sign out any unverified or unrecognized sessions.
 
 8. Join your desired chatrooms.
 
