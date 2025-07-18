@@ -1,7 +1,7 @@
 use indexmap::IndexSet;
 use nom::branch::alt;
-use nom::bytes::{tag, take_while1};
-use nom::character::{anychar, char, satisfy};
+use nom::bytes::complete::{tag, take_while1};
+use nom::character::complete::{anychar, char, satisfy};
 use nom::combinator::{iterator, opt, recognize, value};
 use nom::multi::many0_count;
 use nom::{IResult, Parser};
