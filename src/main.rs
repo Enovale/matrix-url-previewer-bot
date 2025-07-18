@@ -23,6 +23,7 @@ mod common;
 mod config;
 mod extract_url;
 mod html_escape;
+mod limit;
 mod worker;
 
 #[derive(clap::Parser)]

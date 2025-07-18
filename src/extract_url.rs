@@ -1,9 +1,9 @@
 use indexmap::IndexSet;
 use nom::branch::alt;
-use nom::bytes::complete::{tag, tag_no_case, take, take_while1};
-use nom::character::complete::char;
+use nom::bytes::{tag, take_while1};
+use nom::character::{anychar, char, satisfy};
 use nom::combinator::{iterator, opt, recognize, value};
-use nom::multi::{many0_count, many1_count};
+use nom::multi::many0_count;
 use nom::{IResult, Parser};
 use scraper::{Html, Node};
 use tracing::instrument;
@@ -65,10 +65,7 @@ pub fn extract_urls_from_html(html: &str) -> IndexSet<Url> {
 pub fn extract_urls_from_text(text: &str) -> impl Iterator<Item = Url> {
     iterator(
         text,
-        alt((
-            parse_url_from_text.map(Option::Some),
-            value(None, take(1_usize)),
-        )),
+        alt((parse_url_from_text.map(Option::Some), value(None, anychar))),
     )
     .flatten()
     .filter_map(validate_url)
@@ -76,11 +73,18 @@ pub fn extract_urls_from_text(text: &str) -> impl Iterator<Item = Url> {
 
 fn parse_url_from_text(input: &str) -> IResult<&str, &str> {
     recognize((
-        tag_no_case("http"),
-        opt(tag_no_case("s")),
+        satisfy(|c| (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z')),
+        many0_count(satisfy(|c| {
+            c == '+'
+                || c == '-'
+                || c == '.'
+                || (c >= '0' && c <= '9')
+                || (c >= 'A' && c <= 'Z')
+                || (c >= 'a' && c <= 'z')
+        })),
         char(':'),
         many0_count(char('/')),
-        many1_count(parse_delimited),
+        many0_count(parse_delimited),
     ))
     .parse(input)
 }

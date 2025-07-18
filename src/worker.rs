@@ -20,7 +20,7 @@ use tracing::{Instrument, debug, error, info, instrument, warn};
 use url::Url;
 
 use crate::common::{MAX_RESPONSE_TEXT_CHARS, MAX_URL_COUNTS_PER_MESSAGE, SAFE_URL_LENGTH};
-use crate::{config, html_escape};
+use crate::{config, html_escape, limit};
 
 pub struct Worker {
     cache: Cache<Url, Option<OpenGraph>>,
@@ -302,15 +302,15 @@ PRAGMA optimize;
             info!("{preview:?}");
 
             // Extract metadata from OpenGraph, while keeping length limited
-            let title = Self::limit_text_len_chars(
+            let title = limit::length_in_chars(
                 Self::collapse_whitespace(&preview.title),
                 MAX_RESPONSE_TEXT_CHARS,
             );
-            let site_name = Self::limit_text_len_chars(
+            let site_name = limit::length_in_chars(
                 Self::collapse_whitespace(&preview.site_name),
                 MAX_RESPONSE_TEXT_CHARS,
             );
-            let description = Self::limit_text_len_chars(
+            let description = limit::length_in_chars(
                 Self::collapse_whitespace(&preview.description),
                 MAX_RESPONSE_TEXT_CHARS,
             );
@@ -548,42 +548,5 @@ PRAGMA optimize;
             .replace_all(s, " ")
             .trim()
             .to_owned()
-    }
-
-    #[allow(dead_code)] // Not in use yet
-    fn limit_text_len_bytes(mut s: String, max_bytes: usize) -> String {
-        if s.len() <= max_bytes {
-            return s;
-        }
-        for i in (0..max_bytes.saturating_sub(3)).rev() {
-            if s.is_char_boundary(i) {
-                s.truncate(i);
-                if !s.ends_with("…") {
-                    s.push_str("…");
-                }
-                return s;
-            }
-        }
-        unreachable!();
-    }
-
-    fn limit_text_len_chars(mut s: String, max_chars: usize) -> String {
-        if s.is_empty() {
-            return s;
-        }
-        let Some(trunc_char) = max_chars.checked_sub(1) else {
-            return "…".to_owned();
-        };
-        let mut iter = s.char_indices();
-        let Some((trunc_byte, _)) = iter.nth(trunc_char) else {
-            return s;
-        };
-        if iter.next().is_some() {
-            s.truncate(trunc_byte);
-            if !s.ends_with("…") {
-                s.push_str("…");
-            }
-        }
-        s
     }
 }

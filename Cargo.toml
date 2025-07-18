@@ -4,13 +4,13 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-clap = { version = "4.5.40", features = ["derive"] }
+clap = { version = "4.5.41", features = ["derive"] }
 color-eyre = "0.6.5"
 deadpool-sqlite = { version = "*", features = ["tracing"] }
 encoding_rs = "0.8.35"
 eyre = "0.6.12"
 indexmap = "2.10.0"
-matrix-sdk = { version = "0.12.0", features = ["eyre", "socks"] }
+matrix-sdk = { version = "0.13.0", features = ["eyre", "socks"] }
 matrixbot-ezlogin = "0.3.7"
 mime = "0.3.17"
 moka = { version = "0.12.10", features = ["future"] }
@@ -21,8 +21,8 @@ scraper = "0.23.1"
 serde = { version = "1.0.219", features = ["derive"] }
 serde_json = "1.0.140"
 serde_with = "3.14.0"
-tokio = { version = "1.46.0", features = ["full"] }
-toml = "0.8.23"
+tokio = { version = "1.46.1", features = ["full"] }
+toml = "0.9.2"
 tracing = "0.1.41"
 tracing-error = "0.2.1"
 tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
