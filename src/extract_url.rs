@@ -73,15 +73,10 @@ pub fn extract_urls_from_text(text: &str) -> impl Iterator<Item = Url> {
 
 fn parse_url_from_text(input: &str) -> IResult<&str, &str> {
     recognize((
-        satisfy(|c| (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z')),
-        many0_count(satisfy(|c| {
-            c == '+'
-                || c == '-'
-                || c == '.'
-                || (c >= '0' && c <= '9')
-                || (c >= 'A' && c <= 'Z')
-                || (c >= 'a' && c <= 'z')
-        })),
+        satisfy(|c| matches!(c, 'A'..='Z' | 'a'..='z')),
+        many0_count(satisfy(
+            |c| matches!(c, '+' | '-' | '.' | '0'..='9' | 'A'..='Z' | 'a'..='z'),
+        )),
         char(':'),
         many0_count(char('/')),
         many0_count(parse_delimited),
