@@ -359,7 +359,7 @@ PRAGMA optimize;
             }
             reply_text = "(URL preview is unavailable.)".to_string();
             reply_html = format!(
-                "<blockquote><div class=\"m13253-url-preview-headline\"><a class=\"m13253-url-preview-backref\" href=\"{}\">\u{1f517}\u{fe0f}</a> <span class=\"url-preview-error\"><em>URL preview is unavailable.</em></span></div></blockquote>",
+                "<blockquote><div class=\"m13253-url-preview-headline\"><a class=\"m13253-url-preview-backref\" href=\"{}\">\u{26a0}\u{fe0f}</a> <span class=\"m13253-url-preview-error\"><em>URL preview is unavailable.</em></span></div></blockquote>",
                 html_escape::attr(&original_event_link)
             );
         }
