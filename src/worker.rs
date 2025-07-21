@@ -320,7 +320,7 @@ PRAGMA optimize;
 
             if title.is_empty() {
                 reply_html = format!(
-                    "<blockquote><div class=\"m13253-url-preview-headline\"><a class=\"m13253-url-preview-backref\" href=\"{}\">\u{1f517}\u{fe0f}</a> <em><a class=\"m13253-url-preview-empty-title\" href=\"{}\">No title</a></em>",
+                    "<blockquote><div class=\"m13253-url-preview-headline\"><a class=\"m13253-url-preview-backref\" href=\"{}\">\u{26a0}\u{fe0f}</a> <em><a class=\"m13253-url-preview-empty-title\" href=\"{}\">No title</a></em>",
                     html_escape::attr(&original_event_link),
                     html_escape::attr(canonical_url.as_str())
                 );
