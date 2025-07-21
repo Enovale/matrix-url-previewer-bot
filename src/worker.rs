@@ -60,7 +60,6 @@ CREATE TABLE IF NOT EXISTS messages (
     response_id TEXT NOT NULL,
     UNIQUE(room_id, event_id)
 );
-CREATE INDEX IF NOT EXISTS idx_messages_room_event ON messages (room_id, event_id);
 COMMIT;
 PRAGMA optimize;
 ",
