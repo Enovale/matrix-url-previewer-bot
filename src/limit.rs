@@ -16,21 +16,16 @@ pub fn length_in_bytes(mut s: String, max_bytes: usize) -> String {
 }
 
 pub fn length_in_chars(mut s: String, max_chars: usize) -> String {
-    if s.is_empty() {
-        return s;
-    }
-    let Some(trunc_char) = max_chars.checked_sub(1) else {
-        return "…".to_owned();
-    };
-    let mut iter = s.char_indices();
-    let Some((trunc_byte, _)) = iter.nth(trunc_char) else {
-        return s;
-    };
-    if iter.next().is_some() {
-        s.truncate(trunc_byte);
-        if !s.ends_with("…") {
-            s.push_str("…");
+    let mut prev_idx_byte = 0;
+    for (idx_char, (idx_byte, _)) in s.char_indices().enumerate() {
+        if idx_char >= max_chars {
+            s.truncate(prev_idx_byte);
+            if !s.ends_with("…") {
+                s.push_str("…");
+            }
+            return s;
         }
+        prev_idx_byte = idx_byte;
     }
     s
 }
