@@ -147,7 +147,7 @@ PRAGMA optimize;
                 _ => None,
             };
             let response = RoomMessageEventContentWithoutRelation::notice_html(
-                "(Loading…)",
+                "\u{23f3}\u{fe0f} (Loading…)",
                 format!(
                     "<blockquote><div class=\"m13253-url-preview-headline\"><a class=\"m13253-url-preview-backref\" href=\"{}\">\u{23f3}\u{fe0f}</a> <span class=\"m13253-url-preview-loading\"><em>Loading…</em></span></div></blockquote>",
                     html_escape::attr(&original_event_link)
@@ -324,7 +324,7 @@ PRAGMA optimize;
                     html_escape::attr(&original_event_link),
                     html_escape::attr(canonical_url.as_str())
                 );
-                reply_text = "(No title)".to_owned();
+                reply_text = "\u{26a0}\u{fe0f} (No title)".to_owned();
             } else {
                 reply_html = format!(
                     "<blockquote><div class=\"m13253-url-preview-headline\"><a class=\"m13253-url-preview-backref\" href=\"{}\">\u{1f517}\u{fe0f}</a> <strong><a class=\"m13253-url-preview-title\" href=\"{}\">{}</a></strong>",
@@ -332,7 +332,7 @@ PRAGMA optimize;
                     html_escape::attr(canonical_url.as_str()),
                     html_escape::text(&title)
                 );
-                reply_text = title;
+                reply_text = format!("\u{1f517}\u{fe0f} {title}");
             }
             if !site_name.is_empty() {
                 reply_text.push_str(" \u{2013} ");
@@ -357,7 +357,7 @@ PRAGMA optimize;
             if is_edit {
                 return;
             }
-            reply_text = "(URL preview is unavailable.)".to_string();
+            reply_text = "\u{26a0}\u{fe0f} (URL preview is unavailable.)".to_string();
             reply_html = format!(
                 "<blockquote><div class=\"m13253-url-preview-headline\"><a class=\"m13253-url-preview-backref\" href=\"{}\">\u{26a0}\u{fe0f}</a> <span class=\"m13253-url-preview-error\"><em>URL preview is unavailable.</em></span></div></blockquote>",
                 html_escape::attr(&original_event_link)
