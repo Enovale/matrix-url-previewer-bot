@@ -253,7 +253,7 @@ async fn on_deletion(
 #[instrument(skip_all)]
 async fn on_utd(event: OriginalSyncRoomEncryptedEvent, room: Room, raw_event: RawEvent) {
     error!(
-        "Unable to decrypt room {}, event {} ({})",
+        "Unable to decrypt room {}, event {} ({}).",
         room.room_id(),
         event.event_id,
         raw_event.get()
