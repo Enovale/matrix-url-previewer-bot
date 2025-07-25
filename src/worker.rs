@@ -414,23 +414,21 @@ PRAGMA optimize;
         static META_OG_URL_FALLBACK: LazyLock<Selector> =
             LazyLock::new(|| Selector::parse("link[rel=\"canonical\" i]").unwrap());
 
-        let timeout = tokio::time::sleep(self.config.crawler_timeout);
-        tokio::pin!(timeout);
-
         // Send out the request
-        let mut response = tokio::select! {
-            _ = &mut timeout => {
-                error!("Failed to fetch URL preview for {url}: Request timed out.");
-                None
-            },
-            response = self.reqwest_client.get(url.clone()).send() => match response.and_then(|response| response.error_for_status()) {
-                Ok(response) => Some(response),
-                Err(err) => {
-                    error!("Failed to fetch URL preview for {url}: {err}");
-                    None
-                }
-            },
-        }?;
+        let mut response = match self
+            .reqwest_client
+            .get(url.clone())
+            .timeout(self.config.crawler_timeout)
+            .send()
+            .await
+            .and_then(|response| response.error_for_status())
+        {
+            Ok(response) => response,
+            Err(err) => {
+                error!("Failed to fetch URL preview for {url}: {err}");
+                return None;
+            }
+        };
 
         // Download the response
         let charset = response
@@ -448,20 +446,14 @@ PRAGMA optimize;
             .unwrap_or(encoding_rs::UTF_8);
         let mut document = Vec::new();
         while document.len() < self.config.crawler_max_size {
-            tokio::select! {
-                _ = &mut timeout => {
-                error!("Failed to fetch URL preview for {url}: Read timed out.");
+            match response.chunk().await {
+                Ok(Some(chunk)) => document.extend(chunk),
+                Ok(None) => break,
+                Err(err) => {
+                    error!("Error reading from {url}, using partial data: {err}");
                     break;
-                },
-                chunk = response.chunk() => match chunk {
-                    Ok(Some(chunk)) => document.extend(chunk),
-                    Ok(None) => break,
-                    Err(err) => {
-                        error!("Failed to fetch URL preview for {url}: {err}");
-                        break;
-                    }
                 }
-            };
+            }
         }
         document.truncate(self.config.crawler_max_size);
 
