@@ -251,11 +251,10 @@ async fn on_deletion(
 
 // https://spec.matrix.org/v1.14/client-server-api/#mroomencrypted
 #[instrument(skip_all)]
-async fn on_utd(event: OriginalSyncRoomEncryptedEvent, room: Room, raw_event: RawEvent) {
+async fn on_utd(_event: OriginalSyncRoomEncryptedEvent, room: Room, raw_event: RawEvent) {
     error!(
-        "Unable to decrypt room {}, event {} ({}).",
+        "Unable to decrypt: room {}, event {}",
         room.room_id(),
-        event.event_id,
         raw_event.get()
     );
 }
