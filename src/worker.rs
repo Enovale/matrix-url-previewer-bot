@@ -371,7 +371,7 @@ PRAGMA optimize;
         }
     }
 
-    #[instrument(skip(self))]
+    #[instrument(skip_all)]
     async fn fetch_single_url_preview(self: Arc<Self>, url: Url) -> Option<OpenGraph> {
         // Selectors
         static META_CHARSET: LazyLock<Selector> =
@@ -442,7 +442,7 @@ PRAGMA optimize;
                 Ok(Some(chunk)) => document.extend(chunk),
                 Ok(None) => break,
                 Err(err) => {
-                    error!("Error reading from {}, using partial data: {}", url, err);
+                    warn!("Error reading from {}, using partial data: {}", url, err);
                     break;
                 }
             }
