@@ -4,7 +4,7 @@ use std::sync::Arc;
 use eyre::Result;
 use indexmap::IndexSet;
 use matrix_sdk::config::SyncSettings;
-use matrix_sdk::event_handler::Ctx;
+use matrix_sdk::event_handler::{Ctx, RawEvent};
 use matrix_sdk::ruma::api::client::filter::FilterDefinition;
 use matrix_sdk::ruma::events::room::encrypted::OriginalSyncRoomEncryptedEvent;
 use matrix_sdk::ruma::events::room::member::{MembershipState, SyncRoomMemberEvent};
@@ -13,7 +13,7 @@ use matrix_sdk::ruma::events::room::message::{
 };
 use matrix_sdk::ruma::events::room::redaction::OriginalSyncRoomRedactionEvent;
 use matrix_sdk::{Client, Room, RoomState};
-use tracing::{Instrument, debug, error, info, instrument, warn};
+use tracing::{Instrument, error, info, instrument, warn};
 use tracing_subscriber::{EnvFilter, prelude::*};
 use url::Url;
 
@@ -150,7 +150,7 @@ async fn run(config: Arc<config::Config>) -> Result<()> {
                 info!("Forgetting room {}.", room.room_id());
                 match room.forget().await {
                     Ok(_) => info!("Forgot room {}.", room.room_id()),
-                    Err(err) => error!("Failed to forget room {}: {:?}", room.room_id(), err),
+                    Err(err) => error!("Failed to forget room {}: {}", room.room_id(), err),
                 }
             }
         }
@@ -175,7 +175,6 @@ async fn on_message(
         // Ignore my own message
         return Ok(());
     }
-    debug!("room = {}, event = {:?}", room.room_id(), event);
     if room.state() != RoomState::Joined {
         info!(
             "Ignoring room {}: Current room state is {:?}.",
@@ -218,10 +217,6 @@ async fn on_message(
             .collect::<IndexSet<Url>>()
     };
 
-    info!(
-        "URLs: {:?}",
-        urls.iter().map(Url::as_str).collect::<Vec<_>>()
-    );
     ctx.0
         .on_message(room, thread_id, original_event_id, urls)
         .await?;
@@ -239,7 +234,6 @@ async fn on_deletion(
         // Ignore my own message
         return Ok(());
     }
-    debug!("room = {}, event = {:?}", room.room_id(), event);
     if room.state() != RoomState::Joined {
         info!(
             "Ignoring room {}: Current room state is {:?}.",
@@ -257,9 +251,13 @@ async fn on_deletion(
 
 // https://spec.matrix.org/v1.14/client-server-api/#mroomencrypted
 #[instrument(skip_all)]
-async fn on_utd(event: OriginalSyncRoomEncryptedEvent, room: Room) {
-    debug!("room = {}, event = {:?}", room.room_id(), event);
-    error!("Unable to decrypt event {}.", event.event_id);
+async fn on_utd(event: OriginalSyncRoomEncryptedEvent, room: Room, raw_event: RawEvent) {
+    error!(
+        "Unable to decrypt room {}, event {} ({})",
+        room.room_id(),
+        event.event_id,
+        raw_event.get()
+    );
 }
 
 // https://spec.matrix.org/v1.14/client-server-api/#mroommember
@@ -271,14 +269,13 @@ async fn on_leave(event: SyncRoomMemberEvent, room: Room) {
     ) {
         return;
     }
-    debug!("room = {}, event = {:?}", room.room_id(), event);
 
     match room.state() {
         RoomState::Joined => {
             tokio::spawn(
                 async move {
                     if let Err(err) = room.sync_members().await {
-                        warn!("Failed to sync members of {}: {:?}", room.room_id(), err);
+                        warn!("Failed to sync members of {}: {}", room.room_id(), err);
                     }
                     // Only I remain in the room.
                     if room.joined_members_count() <= 1 {
@@ -286,7 +283,7 @@ async fn on_leave(event: SyncRoomMemberEvent, room: Room) {
                         match room.leave().await {
                             Ok(_) => info!("Left room {}.", room.room_id()),
                             Err(err) => {
-                                error!("Failed to leave room {}: {:?}", room.room_id(), err)
+                                error!("Failed to leave room {}: {}", room.room_id(), err)
                             }
                         }
                     }
@@ -301,7 +298,7 @@ async fn on_leave(event: SyncRoomMemberEvent, room: Room) {
                     info!("Forgetting room {}.", room.room_id());
                     match room.forget().await {
                         Ok(_) => info!("Forgot room {}.", room.room_id()),
-                        Err(err) => error!("Failed to forget room {}: {:?}", room.room_id(), err),
+                        Err(err) => error!("Failed to forget room {}: {}", room.room_id(), err),
                     }
                 }
                 .in_current_span(),

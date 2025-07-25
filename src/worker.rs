@@ -217,7 +217,7 @@ PRAGMA optimize;
         tokio::spawn(
             async move {
                 if let Err(err) = room.redact(&response_id_clone, None, None).await {
-                    error!("Failed to delete URL preview message: {err}");
+                    error!("Failed to delete URL preview message: {}", err);
                 }
             }
             .in_current_span(),
@@ -239,7 +239,7 @@ PRAGMA optimize;
         let mut reply_html = String::new();
 
         for mut url in urls.into_iter().take(MAX_URL_COUNTS_PER_MESSAGE) {
-            info!("Fetching URL preview for: {url}");
+            info!("Fetching URL preview for: {}", url);
 
             let mut url_str = Cow::from(url.as_str());
             for (from, to) in self.rewrite_url.iter() {
@@ -255,7 +255,7 @@ PRAGMA optimize;
                 url = match Url::parse(&url_str) {
                     Ok(url) => url,
                     Err(err) => {
-                        error!("Failed to parse the URL after rewrite: {err}");
+                        error!("Failed to parse the URL after rewrite: {}", err);
                         continue;
                     }
                 }
@@ -274,20 +274,12 @@ PRAGMA optimize;
             // {
             //     Ok(response) => response,
             //     Err(err) => {
-            //         error!("Failed to fetch URL preview for {url}: {err}");
+            //         error!("Failed to fetch URL preview for {}: {}", url, err);
             //         continue;
             //     }
             // };
             // let Some(preview) = response.data.as_deref() else {
             //     continue;
-            // };
-            // info!("{preview}");
-            // let preview: OpenGraph = match serde_json::from_str(preview.get()) {
-            //     Ok(preview) => preview,
-            //     Err(err) => {
-            //         error!("Failed to parse URL preview for {url}: {err}");
-            //         continue;
-            //     }
             // };
 
             let Some(preview) = self
@@ -298,7 +290,7 @@ PRAGMA optimize;
                 warn!("URL has no preview.");
                 continue;
             };
-            info!("{preview:?}");
+            info!("{:?}", preview);
 
             // Extract metadata from OpenGraph, while keeping length limited
             let title = limit::length_in_chars(
@@ -375,7 +367,7 @@ PRAGMA optimize;
                 .add_mentions(Mentions::new()),
         ))));
         if let Err(err) = room.send(reply).await {
-            error!("Failed to send URL preview: {err}");
+            error!("Failed to send URL preview: {}", err);
         }
     }
 
@@ -425,7 +417,7 @@ PRAGMA optimize;
         {
             Ok(response) => response,
             Err(err) => {
-                error!("Failed to fetch URL preview for {url}: {err}");
+                error!("Failed to fetch URL preview for {}: {}", url, err);
                 return None;
             }
         };
@@ -450,7 +442,7 @@ PRAGMA optimize;
                 Ok(Some(chunk)) => document.extend(chunk),
                 Ok(None) => break,
                 Err(err) => {
-                    error!("Error reading from {url}, using partial data: {err}");
+                    error!("Error reading from {}, using partial data: {}", url, err);
                     break;
                 }
             }
