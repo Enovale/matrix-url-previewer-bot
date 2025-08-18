@@ -1,3 +1,4 @@
+use matrix_sdk::attachment::AttachmentConfig;
 use std::borrow::Cow;
 use std::str::FromStr;
 use std::sync::{Arc, LazyLock};
@@ -31,11 +32,20 @@ pub struct Worker {
 }
 
 #[derive(Clone, Debug)]
+struct EmbedMedia {
+    pub url: String,
+    pub data: Vec<u8>,
+    pub filename: String,
+    pub content_type: Mime,
+}
+
+#[derive(Clone, Debug)]
 struct OpenGraph {
     pub description: String,
     pub site_name: String,
     pub title: String,
     pub url: String,
+    pub media_urls: Vec<String>,
 }
 
 impl Worker {
@@ -146,6 +156,7 @@ PRAGMA optimize;
                 ))),
                 _ => None,
             };
+
             let response = RoomMessageEventContentWithoutRelation::notice_html(
                 "\u{23f3}\u{fe0f} (Loading…)",
                 format!(
@@ -237,6 +248,7 @@ PRAGMA optimize;
     ) {
         let mut reply_text = String::new();
         let mut reply_html = String::new();
+        let mut reply_images = Vec::new();
 
         for mut url in urls.into_iter().take(MAX_URL_COUNTS_PER_MESSAGE) {
             info!("Fetching URL preview for: {}", url);
@@ -291,6 +303,21 @@ PRAGMA optimize;
                 continue;
             };
             info!("{:?}", preview);
+
+            if preview.media_urls.len() > 0 {
+                for str in preview.media_urls {
+                    let Some(canonical_url) = Url::parse(&str)
+                        .ok()
+                        .filter(|url| url.as_str().len() <= SAFE_URL_LENGTH)
+                    else {
+                        continue;
+                    };
+
+                    let img = self.clone().get_image_data(canonical_url).await.unwrap();
+
+                    reply_images.push(img);
+                }
+            }
 
             // Extract metadata from OpenGraph, while keeping length limited
             let title = limit::length_in_chars(
@@ -369,6 +396,20 @@ PRAGMA optimize;
         if let Err(err) = room.send(reply).await {
             error!("Failed to send URL preview: {}", err);
         }
+
+        for img in reply_images {
+            if let Err(err) = room
+                .send_attachment(
+                    img.filename.clone(),
+                    &img.content_type,
+                    img.data.clone(),
+                    AttachmentConfig::new(),
+                )
+                .await
+            {
+                error!("Failed to send URL preview image: {}", err);
+            }
+        }
     }
 
     #[instrument(skip_all)]
@@ -405,6 +446,29 @@ PRAGMA optimize;
             LazyLock::new(|| Selector::parse("meta[property=\"og:url\" i]").unwrap());
         static META_OG_URL_FALLBACK: LazyLock<Selector> =
             LazyLock::new(|| Selector::parse("link[rel=\"canonical\" i]").unwrap());
+        static META_OG_MEDIA: LazyLock<[LazyLock<Vec<Selector>>; 3]> = LazyLock::new(|| {
+            [
+                LazyLock::new(|| {
+                    [
+                        // This is bad. TODO
+                        // These selectors should really be separated and have actual logic performed on them
+                        Selector::parse("meta[property=\"og:image\" i]:not([content*=\"thumbnail.\" i])").unwrap(),
+                        Selector::parse("meta[property=\"twitter:image\" i]:not([content*=\"thumbnail.\" i]):not([content=\"0\"])").unwrap(),
+                    ]
+                    .to_vec()
+                }),
+                LazyLock::new(|| {
+                    [
+                        Selector::parse("meta[property=\"og:video\" i]").unwrap(),
+                        Selector::parse("meta[property=\"twitter:player:stream\" i]").unwrap(),
+                    ]
+                    .to_vec()
+                }),
+                LazyLock::new(|| {
+                    [Selector::parse("meta[property=\"og:audio\" i]").unwrap()].to_vec()
+                }),
+            ]
+        });
 
         // Send out the request
         let mut response = match self
@@ -520,7 +584,62 @@ PRAGMA optimize;
                 })
                 .unwrap_or_default()
                 .to_owned(),
+            media_urls: META_OG_MEDIA
+                .iter()
+                .flat_map(|selectors| {
+                    selectors
+                        .iter()
+                        .flat_map(|selector| dom.select(selector))
+                        .filter_map(|element| element.attr("content"))
+                        .filter(|&content| !content.is_empty())
+                        .map(|content| content.to_owned())
+                })
+                .collect(),
         })
+    }
+
+    async fn get_image_data(self: Arc<Self>, url: Url) -> Option<EmbedMedia> {
+        // Send out the request
+        let response = match self
+            .reqwest_client
+            .get(url.clone())
+            .timeout(self.config.crawler_timeout)
+            .send()
+            .await
+            .and_then(|response| response.error_for_status())
+        {
+            Ok(response) => response,
+            Err(err) => {
+                error!("Failed to fetch URL preview for {}: {}", url, err);
+                return None;
+            }
+        };
+
+        let content_type = Mime::from_str(&String::from_utf8_lossy(
+            response
+                .headers()
+                .get(reqwest::header::CONTENT_TYPE)
+                .unwrap()
+                .as_bytes(),
+        ))
+        .unwrap();
+
+        // Download the response
+        let bytes = match response.bytes().await {
+            Ok(bytes) => bytes,
+            Err(err) => {
+                error!("Failed to fetch URL preview for {}: {}", url, err);
+                return None;
+            }
+        }
+        .to_vec();
+
+        return Some(EmbedMedia {
+            url: url.to_string(),
+            data: bytes,
+            filename: url.to_string(),
+            content_type: content_type,
+        });
     }
 
     fn collapse_whitespace(s: &str) -> String {

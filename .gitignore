@@ -2,3 +2,4 @@ _*
 *.sqlite3*
 /target
 recovery-key.txt
+/.direnv
