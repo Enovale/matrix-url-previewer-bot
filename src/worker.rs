@@ -446,29 +446,22 @@ PRAGMA optimize;
             LazyLock::new(|| Selector::parse("meta[property=\"og:url\" i]").unwrap());
         static META_OG_URL_FALLBACK: LazyLock<Selector> =
             LazyLock::new(|| Selector::parse("link[rel=\"canonical\" i]").unwrap());
-        static META_OG_MEDIA: LazyLock<[LazyLock<Vec<Selector>>; 3]> = LazyLock::new(|| {
+        static META_OG_TYPE: LazyLock<Selector> =
+            LazyLock::new(|| Selector::parse("meta[property=\"og:type\" i]").unwrap());
+        static META_OG_IMAGE: LazyLock<[Selector; 2]> = LazyLock::new(|| {
             [
-                LazyLock::new(|| {
-                    [
-                        // This is bad. TODO
-                        // These selectors should really be separated and have actual logic performed on them
-                        Selector::parse("meta[property=\"og:image\" i]:not([content*=\"thumbnail.\" i])").unwrap(),
-                        Selector::parse("meta[property=\"twitter:image\" i]:not([content*=\"thumbnail.\" i]):not([content=\"0\"])").unwrap(),
-                    ]
-                    .to_vec()
-                }),
-                LazyLock::new(|| {
-                    [
-                        Selector::parse("meta[property=\"og:video\" i]").unwrap(),
-                        Selector::parse("meta[property=\"twitter:player:stream\" i]").unwrap(),
-                    ]
-                    .to_vec()
-                }),
-                LazyLock::new(|| {
-                    [Selector::parse("meta[property=\"og:audio\" i]").unwrap()].to_vec()
-                }),
+                Selector::parse("meta[property=\"og:image\" i]").unwrap(),
+                Selector::parse("meta[property=\"twitter:image\" i]").unwrap(),
             ]
         });
+        static META_OG_VIDEO: LazyLock<[Selector; 2]> = LazyLock::new(|| {
+            [
+                Selector::parse("meta[property=\"og:video\" i]").unwrap(),
+                Selector::parse("meta[property=\"twitter:player:stream\" i]").unwrap(),
+            ]
+        });
+        static META_OG_AUDIO: LazyLock<Selector> =
+            LazyLock::new(|| Selector::parse("meta[property=\"og:audio\" i]").unwrap());
 
         // Send out the request
         let mut response = match self
@@ -537,6 +530,28 @@ PRAGMA optimize;
             dom = Html::parse_document(&charset.decode(&document).0);
         }
 
+        let og_type = dom
+            .select(&META_OG_TYPE)
+            .filter_map(|element| element.attr("content"))
+            .filter(|&content| !content.is_empty())
+            .next()
+            .unwrap_or_default()
+            .to_owned();
+
+        info!(og_type);
+
+        let mut selector_list = Vec::new();
+        match og_type.as_str() {
+            "image" | "gifv" => selector_list.extend(META_OG_IMAGE.iter()),
+            "video" => selector_list.extend(META_OG_VIDEO.iter()),
+            "audio" => selector_list.push(&META_OG_AUDIO),
+            _ => {
+                selector_list.extend(META_OG_IMAGE.iter());
+                selector_list.extend(META_OG_VIDEO.iter());
+                selector_list.push(&META_OG_AUDIO);
+            },
+        };
+
         // Generate the output
         // Ref: https://github.com/element-hq/synapse/blob/v1.132.0/synapse/media/preview_html.py#L237
         Some(OpenGraph {
@@ -584,17 +599,11 @@ PRAGMA optimize;
                 })
                 .unwrap_or_default()
                 .to_owned(),
-            media_urls: META_OG_MEDIA
-                .iter()
-                .flat_map(|selectors| {
-                    selectors
-                        .iter()
-                        .flat_map(|selector| dom.select(selector))
-                        .filter_map(|element| element.attr("content"))
-                        .filter(|&content| !content.is_empty())
-                        .map(|content| content.to_owned())
-                })
-                .collect(),
+            media_urls: selector_list.iter().flat_map(|selector| dom.select(selector))
+                    .filter_map(|element| element.attr("content"))
+                    .filter(|&content| !content.is_empty())
+                    .map(|content| content.to_owned())
+                    .collect()
         })
     }
 
