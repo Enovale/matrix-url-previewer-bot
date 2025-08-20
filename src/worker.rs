@@ -1,5 +1,7 @@
-use matrix_sdk::attachment::AttachmentConfig;
+use image::ImageReader;
+use matrix_sdk::attachment::{AttachmentConfig, Thumbnail};
 use std::borrow::Cow;
+use std::io::Cursor;
 use std::str::FromStr;
 use std::sync::{Arc, LazyLock};
 
@@ -12,7 +14,7 @@ use matrix_sdk::Room;
 use matrix_sdk::ruma::events::Mentions;
 use matrix_sdk::ruma::events::relation::{Replacement, Thread};
 use matrix_sdk::ruma::events::room::message::{Relation, RoomMessageEventContentWithoutRelation};
-use matrix_sdk::ruma::{EventId, OwnedEventId};
+use matrix_sdk::ruma::{EventId, OwnedEventId, UInt};
 use mime::Mime;
 use moka::future::{Cache, CacheBuilder};
 use regex::Regex;
@@ -32,11 +34,20 @@ pub struct Worker {
 }
 
 #[derive(Clone, Debug)]
+struct OpenGraphMedia {
+    pub url: String,
+    pub thumb_url: Option<String>,
+    pub content_type: String,
+}
+
+#[derive(Clone, Debug)]
 struct EmbedMedia {
     pub url: String,
     pub data: Vec<u8>,
+    pub thumb_data: Option<Vec<u8>>,
     pub filename: String,
     pub content_type: Mime,
+    pub thumb_content_type: Option<Mime>,
 }
 
 #[derive(Clone, Debug)]
@@ -45,7 +56,7 @@ struct OpenGraph {
     pub site_name: String,
     pub title: String,
     pub url: String,
-    pub media_urls: Vec<String>,
+    pub media_urls: Vec<OpenGraphMedia>,
 }
 
 impl Worker {
@@ -305,15 +316,25 @@ PRAGMA optimize;
             info!("{:?}", preview);
 
             if preview.media_urls.len() > 0 {
-                for str in preview.media_urls {
-                    let Some(canonical_url) = Url::parse(&str)
+                for media in preview.media_urls {
+                    let Some(canonical_url) = Url::parse(&media.url)
                         .ok()
                         .filter(|url| url.as_str().len() <= SAFE_URL_LENGTH)
                     else {
                         continue;
                     };
 
-                    let img = self.clone().get_image_data(canonical_url).await.unwrap();
+                    let canonical_thumb_url = media.thumb_url.and_then(|url| {
+                        Url::parse(&url)
+                            .ok()
+                            .filter(|url| url.as_str().len() <= SAFE_URL_LENGTH)
+                    });
+
+                    let img = self
+                        .clone()
+                        .get_image_data(canonical_url, canonical_thumb_url)
+                        .await
+                        .unwrap();
 
                     reply_images.push(img);
                 }
@@ -403,7 +424,22 @@ PRAGMA optimize;
                     img.filename.clone(),
                     &img.content_type,
                     img.data.clone(),
-                    AttachmentConfig::new(),
+                    img.thumb_data
+                        .and_then(|thumb| {
+                            let decoded_image = ImageReader::new(Cursor::new(thumb.clone()))
+                                .with_guessed_format()
+                                .and_then(|dec| Ok(dec.decode()))
+                                .expect("Couldn't decode image!")
+                                .expect("Couldn't decode image (worse!)");
+                            Some(AttachmentConfig::new().thumbnail(Some(Thumbnail {
+                                data: thumb.clone(),
+                                content_type: img.thumb_content_type.unwrap(),
+                                width: decoded_image.width().into(),
+                                height: decoded_image.height().into(),
+                                size: UInt::new(thumb.len().try_into().unwrap()).unwrap(),
+                            })))
+                        })
+                        .unwrap_or_default(),
                 )
                 .await
             {
@@ -462,6 +498,20 @@ PRAGMA optimize;
         });
         static META_OG_AUDIO: LazyLock<Selector> =
             LazyLock::new(|| Selector::parse("meta[property=\"og:audio\" i]").unwrap());
+        static META_OG_IMAGE_TYPE: LazyLock<[Selector; 2]> = LazyLock::new(|| {
+            [
+                Selector::parse("meta[property=\"og:image:type\" i]").unwrap(),
+                Selector::parse("meta[property=\"twitter:image:type\" i]").unwrap(),
+            ]
+        });
+        static META_OG_VIDEO_TYPE: LazyLock<[Selector; 2]> = LazyLock::new(|| {
+            [
+                Selector::parse("meta[property=\"og:video:type\" i]").unwrap(),
+                Selector::parse("meta[property=\"twitter:player:stream:type\" i]").unwrap(),
+            ]
+        });
+        static META_OG_AUDIO_TYPE: LazyLock<Selector> =
+            LazyLock::new(|| Selector::parse("meta[property=\"og:audio:type\" i]").unwrap());
 
         // Send out the request
         let mut response = match self
@@ -549,7 +599,88 @@ PRAGMA optimize;
                 selector_list.extend(META_OG_IMAGE.iter());
                 selector_list.extend(META_OG_VIDEO.iter());
                 selector_list.push(&META_OG_AUDIO);
-            },
+            }
+        };
+
+        let get_images = || {
+            META_OG_IMAGE
+                .iter()
+                .flat_map(|selector| dom.select(selector))
+                .filter_map(|element| element.attr("content"))
+                .filter(|&content| !content.is_empty())
+                .map(|content| content.to_owned())
+                .zip(
+                    META_OG_IMAGE_TYPE
+                        .iter()
+                        .flat_map(|selector| dom.select(selector))
+                        .filter_map(|element| element.attr("content"))
+                        .filter(|&content| !content.is_empty())
+                        .map(|content| content.to_owned()),
+                )
+                .map(|zipped| OpenGraphMedia {
+                    url: zipped.0,
+                    thumb_url: None,
+                    content_type: zipped.1,
+                })
+                .collect::<Vec<OpenGraphMedia>>()
+        };
+
+        let get_videos = || {
+            META_OG_VIDEO
+                .iter()
+                .flat_map(|selector| dom.select(selector))
+                .filter_map(|element| element.attr("content"))
+                .filter(|&content| !content.is_empty())
+                .map(|content| content.to_owned())
+                .zip(
+                    META_OG_VIDEO_TYPE
+                        .iter()
+                        .flat_map(|selector| dom.select(selector))
+                        .filter_map(|element| element.attr("content"))
+                        .filter(|&content| !content.is_empty())
+                        .map(|content| content.to_owned()),
+                )
+                .map(|zipped| OpenGraphMedia {
+                    url: zipped.0,
+                    thumb_url: get_images()
+                        .iter()
+                        .next()
+                        .and_then(|url| Some(url.url.clone())),
+                    content_type: zipped.1,
+                })
+                .collect()
+        };
+
+        let get_audios = || {
+            dom.select(&META_OG_AUDIO)
+                .filter_map(|element| element.attr("content"))
+                .filter(|&content| !content.is_empty())
+                .map(|content| content.to_owned())
+                .zip(
+                    dom.select(&META_OG_AUDIO_TYPE)
+                        .filter_map(|element| element.attr("content"))
+                        .filter(|&content| !content.is_empty())
+                        .map(|content| content.to_owned()),
+                )
+                .map(|zipped| OpenGraphMedia {
+                    url: zipped.0,
+                    thumb_url: None,
+                    content_type: zipped.1,
+                })
+                .collect()
+        };
+
+        let urls: Vec<OpenGraphMedia> = match og_type.as_str() {
+            "image" | "gifv" => get_images(),
+            "video" => get_videos(),
+            "audio" => get_audios(),
+            _ => {
+                let mut media: Vec<OpenGraphMedia> = Vec::new();
+                media.extend(get_images());
+                media.extend(get_videos());
+                media.extend(get_audios());
+                media
+            }
         };
 
         // Generate the output
@@ -599,15 +730,34 @@ PRAGMA optimize;
                 })
                 .unwrap_or_default()
                 .to_owned(),
-            media_urls: selector_list.iter().flat_map(|selector| dom.select(selector))
-                    .filter_map(|element| element.attr("content"))
-                    .filter(|&content| !content.is_empty())
-                    .map(|content| content.to_owned())
-                    .collect()
+            media_urls: urls,
         })
     }
 
-    async fn get_image_data(self: Arc<Self>, url: Url) -> Option<EmbedMedia> {
+    async fn get_image_data(
+        self: Arc<Self>,
+        url: Url,
+        thumb_url: Option<Url>,
+    ) -> Option<EmbedMedia> {
+        let Some(main) = self.clone().download_image(url.clone()).await else {
+            return None;
+        };
+        let thumb = match thumb_url {
+            Some(thumb) => self.clone().download_image(thumb).await,
+            None => None,
+        };
+
+        return Some(EmbedMedia {
+            url: url.clone().to_string(),
+            data: main.0,
+            content_type: main.1,
+            filename: url.to_string(),
+            thumb_data: thumb.clone().and_then(|t| Some(t.0)),
+            thumb_content_type: thumb.and_then(|t| Some(t.1)),
+        });
+    }
+
+    async fn download_image(self: Arc<Self>, url: Url) -> Option<(Vec<u8>, Mime)> {
         // Send out the request
         let response = match self
             .reqwest_client
@@ -643,12 +793,7 @@ PRAGMA optimize;
         }
         .to_vec();
 
-        return Some(EmbedMedia {
-            url: url.to_string(),
-            data: bytes,
-            filename: url.to_string(),
-            content_type: content_type,
-        });
+        Some((bytes, content_type))
     }
 
     fn collapse_whitespace(s: &str) -> String {
